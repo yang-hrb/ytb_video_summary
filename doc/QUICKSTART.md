@@ -86,7 +86,8 @@ ytb_video_summary/
 │
 ├── output/               # 输出目录
 │   ├── transcripts/      # 字幕文件
-│   └── summaries/        # 总结文件
+│   ├── summaries/        # 总结文件（按视频ID）
+│   └── reports/          # 报告文件（按时间和标题）
 │
 ├── temp/                 # 临时音频文件
 ├── .env.example         # 环境变量模板
@@ -159,7 +160,13 @@ python -m unittest tests.test_youtube
 
 2. **总结文件**: `output/summaries/[video_id]_summary.md`
    - Markdown 格式
-   - 包含标题、摘要、关键点、时间轴等
+   - 按视频 ID 命名
+
+3. **报告文件**: `output/reports/[timestamp]_[视频标题].md`
+   - Markdown 格式
+   - 按时间戳和视频标题命名
+   - 包含视频 ID 和 URL 作为参考信息
+   - 例如：`20251029_1535_如何学习Python编程.md`
 
 ## ⚠️ 常见问题
 

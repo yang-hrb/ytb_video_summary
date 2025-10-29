@@ -34,6 +34,21 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
     return filename
 
 
+def create_report_filename(title: str) -> str:
+    """
+    创建报告文件名：时间戳_视频标题.md
+    
+    Args:
+        title: 视频标题
+        
+    Returns:
+        格式化的文件名
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    clean_title = sanitize_filename(title, max_length=100)
+    return f"{timestamp}_{clean_title}.md"
+
+
 def format_duration(seconds: int) -> str:
     """
     将秒数转换为可读的时长格式

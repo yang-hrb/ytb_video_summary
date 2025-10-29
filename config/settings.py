@@ -29,6 +29,7 @@ class Config:
     TEMP_DIR = BASE_DIR / os.getenv('TEMP_DIR', 'temp')
     TRANSCRIPT_DIR = OUTPUT_DIR / 'transcripts'
     SUMMARY_DIR = OUTPUT_DIR / 'summaries'
+    REPORT_DIR = OUTPUT_DIR / 'reports'
     
     def __init__(self):
         """初始化时自动创建必要的目录"""
@@ -36,7 +37,7 @@ class Config:
     
     def _create_directories(self):
         """创建所有必要的目录"""
-        for dir_path in [self.OUTPUT_DIR, self.TEMP_DIR, self.TRANSCRIPT_DIR, self.SUMMARY_DIR]:
+        for dir_path in [self.OUTPUT_DIR, self.TEMP_DIR, self.TRANSCRIPT_DIR, self.SUMMARY_DIR, self.REPORT_DIR]:
             dir_path.mkdir(parents=True, exist_ok=True)
     
     def validate(self):

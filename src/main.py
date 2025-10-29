@@ -116,22 +116,26 @@ def process_video(
         print_step("3/4", "正在生成 AI 总结...")
         print(f"  使用风格: {summary_style}")
         
-        summary = summarize_transcript(
+        summary_result = summarize_transcript(
             transcript,
             video_id,
             video_info,
-            style=summary_style
+            style=summary_style,
+            video_url=url
         )
         
         # Step 4: 输出结果
         print_step("4/4", "处理完成!")
         
         transcript_file = config.TRANSCRIPT_DIR / f"{video_id}_transcript.srt"
-        summary_file = config.SUMMARY_DIR / f"{video_id}_summary.md"
+        summary_file = summary_result['summary_path']
+        report_file = summary_result['report_path']
         
         print(f"\n{Fore.CYAN}输出文件:{Style.RESET_ALL}")
         print(f"  转录: {transcript_file}")
         print(f"  总结: {summary_file}")
+        if report_file:
+            print(f"  报告: {report_file}")
         
         print_success("视频处理完成!")
         
@@ -139,9 +143,9 @@ def process_video(
             'video_id': video_id,
             'video_info': video_info,
             'transcript': transcript,
-            'summary': summary,
             'transcript_file': transcript_file,
-            'summary_file': summary_file
+            'summary_file': summary_file,
+            'report_file': report_file
         }
         
     except Exception as e:

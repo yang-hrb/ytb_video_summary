@@ -116,9 +116,9 @@ result = process_video(
     summary_style="detailed"
 )
 
-print(result['summary'])
 print(f"转录文件: {result['transcript_file']}")
 print(f"总结文件: {result['summary_file']}")
+print(f"报告文件: {result['report_file']}")
 ```
 
 ## 📁 输出文件
@@ -126,10 +126,23 @@ print(f"总结文件: {result['summary_file']}")
 ```
 output/
 ├── transcripts/
-│   └── [video_id]_transcript.srt  # 字幕文件
-└── summaries/
-    └── [video_id]_summary.md      # 总结文件（Markdown）
+│   └── [video_id]_transcript.srt      # 字幕文件
+├── summaries/
+│   └── [video_id]_summary.md          # 总结文件（按视频ID命名）
+└── reports/
+    └── [timestamp]_[视频标题].md       # 报告文件（按时间和标题命名）
 ```
+
+### 报告文件格式
+
+报告文件命名格式：`YYYYMMDD_HHMM_视频标题.md`
+
+例如：`20251029_1535_如何学习Python编程.md`
+
+文件内容包含：
+- 视频标题和时长
+- AI 生成的总结
+- 参考信息（视频 ID 和 URL）
 
 ### 总结文件格式示例
 
@@ -154,6 +167,14 @@ output/
 
 ## 💡 核心见解
 [深度分析和启发]
+
+---
+
+## 📎 参考信息
+
+**视频 ID**: `dQw4w9WgXcQ`
+
+**视频链接**: https://youtube.com/watch?v=dQw4w9WgXcQ
 ```
 
 ## ⚙️ 配置说明

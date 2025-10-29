@@ -156,7 +156,8 @@ class Summarizer:
             raise
     
     def save_summary(self, summary: str, output_path: Path, 
-                     video_info: Optional[Dict] = None):
+                     video_info: Optional[Dict] = None, video_id: Optional[str] = None,
+                     video_url: Optional[str] = None):
         """
         保存总结到文件
         
@@ -164,6 +165,8 @@ class Summarizer:
             summary: 总结文本
             output_path: 输出文件路径
             video_info: 视频信息（用于生成头部）
+            video_id: 视频 ID（用于添加引用）
+            video_url: 视频 URL（用于添加引用）
         """
         content = ""
         
@@ -176,6 +179,14 @@ class Summarizer:
         # 添加总结内容
         content += summary
         
+        # 添加引用信息
+        if video_id or video_url:
+            content += "\n\n---\n\n## 📎 参考信息\n\n"
+            if video_id:
+                content += f"**视频 ID**: `{video_id}`\n\n"
+            if video_url:
+                content += f"**视频链接**: {video_url}\n"
+        
         # 保存文件
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -185,7 +196,8 @@ class Summarizer:
 
 def summarize_transcript(transcript: str, video_id: str, 
                         video_info: Optional[Dict] = None,
-                        style: str = "detailed") -> str:
+                        style: str = "detailed",
+                        video_url: Optional[str] = None) -> Dict[str, Path]:
     """
     总结转录文本（便捷函数）
     
@@ -194,15 +206,30 @@ def summarize_transcript(transcript: str, video_id: str,
         video_id: 视频 ID
         video_info: 视频信息
         style: 总结风格
+        video_url: 视频 URL
         
     Returns:
-        总结文本
+        包含文件路径的字典
     """
+    from .utils import create_report_filename
+    
     summarizer = Summarizer()
     summary = summarizer.summarize(transcript, style=style)
     
-    # 保存总结
-    output_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
-    summarizer.save_summary(summary, output_path, video_info)
+    # 保存到 summaries 目录（原有功能）
+    summary_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
+    summarizer.save_summary(summary, summary_path, video_info)
     
-    return summary
+    # 保存到 reports 目录（新增功能，带时间戳和标题）
+    if video_info and video_info.get('title'):
+        report_filename = create_report_filename(video_info['title'])
+        report_path = config.REPORT_DIR / report_filename
+        summarizer.save_summary(summary, report_path, video_info, video_id, video_url)
+        logger.info(f"Report saved: {report_path}")
+    else:
+        report_path = None
+    
+    return {
+        'summary_path': summary_path,
+        'report_path': report_path
+    }
