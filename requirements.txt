@@ -1,0 +1,18 @@
+# Core
+yt-dlp>=2024.10.0
+openai-whisper>=20231117
+python-dotenv>=1.0.0
+
+# API
+requests>=2.31.0
+openai>=1.0.0  # For OpenRouter
+
+# Audio Processing
+ffmpeg-python>=0.2.0
+
+# Utilities
+tqdm>=4.66.0
+colorama>=0.4.6
+
+# Optional: 更快的 Whisper
+# faster-whisper>=0.10.0
