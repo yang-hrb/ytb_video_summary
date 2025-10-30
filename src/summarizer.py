@@ -115,7 +115,9 @@ class Summarizer:
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/ytb_video_summary",
+            "X-Title": "YouTube Video Summarizer"
         }
         
         payload = {

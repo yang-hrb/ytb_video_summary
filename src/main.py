@@ -12,11 +12,17 @@ from typing import Optional
 from colorama import init, Fore, Style
 from tqdm import tqdm
 
+# Ensure project root is on sys.path so imports work whether the user runs
+# `python src/main.py` or `python -m src.main` from the repository root.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from config import config
-from .youtube_handler import process_youtube_video
-from .transcriber import transcribe_video_audio, read_subtitle_file
-from .summarizer import summarize_transcript
-from .utils import clean_temp_files, get_file_size_mb
+from src.youtube_handler import process_youtube_video
+from src.transcriber import transcribe_video_audio, read_subtitle_file
+from src.summarizer import summarize_transcript
+from src.utils import clean_temp_files, get_file_size_mb
 
 # 初始化 colorama
 init(autoreset=True)

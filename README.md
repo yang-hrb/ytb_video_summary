@@ -71,6 +71,7 @@ cp .env.example .env
 ```bash
 # 基础使用
 python src/main.py "https://youtube.com/watch?v=xxxxx"
+python src/main.py "https://www.youtube.com/watch?v=fWLZGd7q3qc"
 
 # 简短总结
 python src/main.py "URL" --style brief
