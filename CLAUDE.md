@@ -24,7 +24,21 @@ cp .env.example .env
 ```
 
 ### Running the Application
+
+**Quick Start Scripts:**
 ```bash
+# Simple mode - just paste URL, uses defaults
+./quick-run.sh
+
+# Full mode - with options for style, keep-audio, cookies
+./run.sh
+```
+
+**Manual Execution:**
+```bash
+# Activate venv first
+source venv/bin/activate
+
 # Basic usage
 python src/main.py "https://youtube.com/watch?v=xxxxx"
 

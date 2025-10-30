@@ -68,7 +68,22 @@ cp .env.example .env
 
 ### 3. 运行程序
 
+**方式一：使用快捷脚本（推荐）**
+
 ```bash
+# 简单模式 - 只需输入 URL，使用默认设置
+./quick-run.sh
+
+# 完整模式 - 可选择总结风格、是否保留音频等选项
+./run.sh
+```
+
+**方式二：手动运行**
+
+```bash
+# 激活虚拟环境
+source venv/bin/activate
+
 # 基础使用
 python src/main.py "https://youtube.com/watch?v=xxxxx"
 
