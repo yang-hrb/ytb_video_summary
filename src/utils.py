@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
@@ -178,8 +179,47 @@ def create_summary_header(title: str, duration: str, timestamp: Optional[str] = 
 def ensure_dir_exists(directory: Path):
     """
     确保目录存在，不存在则创建
-    
+
     Args:
         directory: 目录路径
     """
     directory.mkdir(parents=True, exist_ok=True)
+
+
+def find_ffmpeg_location() -> Optional[str]:
+    """
+    查找 FFmpeg 可执行文件位置
+
+    Returns:
+        FFmpeg 目录路径，如果未找到则返回 None
+    """
+    # 1. 检查环境变量
+    ffmpeg_env = os.getenv('FFMPEG_LOCATION')
+    if ffmpeg_env and Path(ffmpeg_env).exists():
+        logger.info(f"Using FFmpeg from environment variable: {ffmpeg_env}")
+        return ffmpeg_env
+
+    # 2. 检查 PATH 中的 ffmpeg
+    ffmpeg_path = shutil.which('ffmpeg')
+    if ffmpeg_path:
+        ffmpeg_dir = str(Path(ffmpeg_path).parent)
+        logger.info(f"Found FFmpeg in PATH: {ffmpeg_dir}")
+        return ffmpeg_dir
+
+    # 3. 检查常见的安装位置
+    common_locations = [
+        '/opt/homebrew/bin',  # macOS Homebrew (Apple Silicon)
+        '/usr/local/bin',     # macOS Homebrew (Intel) / Linux
+        '/usr/bin',           # Linux
+        'C:\\ffmpeg\\bin',    # Windows
+        'C:\\Program Files\\ffmpeg\\bin',  # Windows
+    ]
+
+    for location in common_locations:
+        ffmpeg_file = Path(location) / 'ffmpeg'
+        if ffmpeg_file.exists() or Path(f"{ffmpeg_file}.exe").exists():
+            logger.info(f"Found FFmpeg at: {location}")
+            return location
+
+    logger.warning("FFmpeg not found in common locations")
+    return None

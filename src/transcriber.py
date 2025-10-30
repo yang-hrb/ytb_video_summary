@@ -1,10 +1,11 @@
 import whisper
+import os
 from pathlib import Path
 from typing import Optional, List, Dict
 import logging
 
 from config import config
-from .utils import format_timestamp
+from .utils import format_timestamp, find_ffmpeg_location
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,12 @@ class Transcriber:
     def load_model(self):
         """加载 Whisper 模型"""
         if self.model is None:
+            # 确保 FFmpeg 在 PATH 中（Whisper 需要）
+            ffmpeg_location = find_ffmpeg_location()
+            if ffmpeg_location and ffmpeg_location not in os.environ.get('PATH', ''):
+                os.environ['PATH'] = f"{ffmpeg_location}{os.pathsep}{os.environ.get('PATH', '')}"
+                logger.info(f"Added FFmpeg to PATH: {ffmpeg_location}")
+
             logger.info(f"Loading Whisper model: {self.model_name}")
             self.model = whisper.load_model(self.model_name)
             logger.info("Model loaded successfully")
