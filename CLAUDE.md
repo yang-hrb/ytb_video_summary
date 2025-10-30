@@ -145,6 +145,18 @@ Uses cookies for authentication:
 ### Whisper Model Selection
 First run downloads the selected model (~150MB for base). Larger models provide better accuracy but require more memory and processing time. The 'base' model provides good balance for most videos.
 
+### FFmpeg Auto-Detection
+The application automatically detects FFmpeg installation in the following order:
+1. `FFMPEG_LOCATION` environment variable in .env
+2. System PATH (using `which ffmpeg`)
+3. Common installation locations:
+   - `/opt/homebrew/bin` (macOS Homebrew Apple Silicon)
+   - `/usr/local/bin` (macOS Homebrew Intel / Linux)
+   - `/usr/bin` (Linux)
+   - `C:\ffmpeg\bin` (Windows)
+
+If FFmpeg is not auto-detected, set `FFMPEG_LOCATION` in your .env file.
+
 ### Audio File Cleanup
 Downloaded audio files are automatically deleted after transcription unless:
 - `--keep-audio` flag is used, OR

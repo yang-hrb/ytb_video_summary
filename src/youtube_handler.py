@@ -4,7 +4,7 @@ from typing import Dict, Optional
 import logging
 
 from config import config
-from .utils import sanitize_filename, extract_video_id
+from .utils import sanitize_filename, extract_video_id, find_ffmpeg_location
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +88,11 @@ class YouTubeHandler:
             'quiet': False,
             'no_warnings': False,
         }
+
+        # 添加 FFmpeg 位置（如果找到）
+        ffmpeg_location = find_ffmpeg_location()
+        if ffmpeg_location:
+            ydl_opts['ffmpeg_location'] = ffmpeg_location
         
         if self.cookies_file:
             ydl_opts['cookiefile'] = self.cookies_file
