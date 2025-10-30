@@ -71,7 +71,6 @@ cp .env.example .env
 ```bash
 # 基础使用
 python src/main.py "https://youtube.com/watch?v=xxxxx"
-python src/main.py "https://www.youtube.com/watch?v=fWLZGd7q3qc"
 
 # 简短总结
 python src/main.py "URL" --style brief
@@ -173,9 +172,9 @@ output/
 
 ## 📎 参考信息
 
-**视频 ID**: `dQw4w9WgXcQ`
+**视频 ID**: 
 
-**视频链接**: https://youtube.com/watch?v=dQw4w9WgXcQ
+**视频链接**: 
 ```
 
 ## ⚙️ 配置说明
@@ -268,17 +267,6 @@ pip install -U yt-dlp
 
 MIT License
 
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📞 联系方式
-
-- GitHub: [你的 GitHub 用户名]
-- Email: [你的邮箱]
-
 ---
 
 **最后更新**: 2025-10-29  
-Made with ❤️ by Yang Yu
-Summize the youtube video into text. 

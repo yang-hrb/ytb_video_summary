@@ -1,3 +1,10 @@
+# folders
+.vscode/
+.idea/
+.claude/
+temp/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
