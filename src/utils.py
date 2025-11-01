@@ -35,19 +35,63 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
     return filename
 
 
-def create_report_filename(title: str) -> str:
+def extract_summary_title(summary: str, max_length: int = 50) -> str:
     """
-    创建报告文件名：时间戳_视频标题.md
-    
+    从总结内容中提取标题
+
     Args:
-        title: 视频标题
-        
+        summary: AI 生成的总结内容
+        max_length: 标题最大长度
+
+    Returns:
+        提取的标题
+    """
+    # 尝试从摘要部分提取标题
+    lines = summary.split('\n')
+    for line in lines:
+        line = line.strip()
+        # 跳过标题标记和空行
+        if line and not line.startswith('#') and not line.startswith('**') and len(line) > 10:
+            # 移除可能的列表符号
+            title = line.lstrip('-•*> ').strip()
+            if title:
+                # 限制长度并清理
+                title = sanitize_filename(title, max_length=max_length)
+                return title
+
+    # 如果无法提取，返回默认值
+    return "summary"
+
+
+def create_report_filename(video_title: str, uploader: str = "", summary: str = "") -> str:
+    """
+    创建报告文件名：时间戳_上传者_内容标题.md
+
+    Args:
+        video_title: 视频标题（用作后备）
+        uploader: 上传者名称（取前10个字符）
+        summary: 总结内容（用于生成内容相关的标题）
+
     Returns:
         格式化的文件名
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    clean_title = sanitize_filename(title, max_length=100)
-    return f"{timestamp}_{clean_title}.md"
+
+    # 处理上传者名称（取前10个字符）
+    uploader_part = ""
+    if uploader:
+        clean_uploader = sanitize_filename(uploader, max_length=10)
+        if clean_uploader:
+            uploader_part = f"{clean_uploader}_"
+
+    # 从总结内容中提取标题
+    if summary:
+        content_title = extract_summary_title(summary, max_length=50)
+    else:
+        # 如果没有总结，使用视频标题
+        content_title = sanitize_filename(video_title, max_length=50)
+
+    return f"{timestamp}_{uploader_part}{content_title}.md"
 
 
 def format_duration(seconds: int) -> str:

@@ -113,10 +113,18 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 
 **`src/utils.py`**
 - Filename sanitization and timestamp formatting utilities
-- `create_report_filename()` - Generates timestamped filenames: `YYYYMMDD_HHMM_title.md`
+- `create_report_filename()` - Generates enhanced filenames: `YYYYMMDD_HHMM_[uploader]_[content-title].md`
+- `extract_summary_title()` - Extracts a descriptive title from AI-generated summary content
 - `extract_video_id()` - Parses various YouTube URL formats
 - `is_playlist_url()` - Detects if a URL is a YouTube playlist
 - `extract_playlist_id()` - Extracts playlist ID from YouTube URLs
+
+**`src/notion_handler.py`**
+- `NotionHandler` class handles Notion API communication
+- `create_page()` - Creates a new page in Notion database with video summary
+- `markdown_to_notion_blocks()` - Converts Markdown content to Notion block format
+- `save_to_notion()` - Convenience function for saving to Notion
+- Gracefully handles missing Notion configuration (falls back to local-only saving)
 
 ### Directory Structure
 
@@ -124,15 +132,27 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 output/
 ├── transcripts/    # [video_id]_transcript.srt - SRT files with timestamps
 ├── summaries/      # [video_id]_summary.md - Summaries indexed by video ID
-└── reports/        # [timestamp]_[title].md - User-friendly timestamped reports
+└── reports/        # [timestamp]_[uploader]_[content-title].md - Enhanced timestamped reports
 temp/               # Temporary audio files (auto-cleaned unless --keep-audio)
 ```
+
+**Report Filename Format:**
+Reports are saved with an enhanced filename format:
+- Format: `YYYYMMDD_HHMM_[uploader]_[content-title].md`
+- `[uploader]`: First 10 characters of the channel name
+- `[content-title]`: AI-extracted title from the summary content (up to 50 chars)
+- Example: `20250101_1430_TechChannel_introduction-to-machine-learning.md`
 
 ### Configuration System
 
 All settings are managed through `.env` file and accessed via `config.config` singleton:
 
+**Required:**
 - **OPENROUTER_API_KEY** - Required for AI summarization
+
+**Optional:**
+- **NOTION_API_KEY** - Notion Integration Token (for automatic Notion sync)
+- **NOTION_DATABASE_ID** - Notion Database ID (where summaries will be saved)
 - **WHISPER_MODEL** - Model size (tiny/base/small/medium/large) - defaults to 'base'
 - **WHISPER_LANGUAGE** - Language code (zh/en/auto) - defaults to 'zh'
 - **AUDIO_QUALITY** - Download quality in kbps (32/64/96/128)
@@ -223,12 +243,37 @@ If you encounter 401 Unauthorized errors, verify:
 2. API key format starts with "sk-or-v1-" or similar
 3. The required headers are present in the API request
 
+## Notion Integration (Optional)
+
+The tool can automatically save video summaries to Notion for centralized knowledge management.
+
+**Setup Instructions:**
+See [doc/NOTION_SETUP.md](doc/NOTION_SETUP.md) for detailed setup guide.
+
+**Quick Setup:**
+1. Create a Notion Integration at https://www.notion.so/my-integrations
+2. Create a database in Notion with "Name" (Title) property
+3. Share the database with your integration
+4. Add to `.env`:
+   ```
+   NOTION_API_KEY=secret_xxxxx
+   NOTION_DATABASE_ID=xxxxx
+   ```
+
+**Features:**
+- Automatically creates Notion pages for each video summary
+- Includes video metadata (title, uploader, duration, URL)
+- Converts Markdown summary to Notion blocks
+- Gracefully falls back to local-only saving if Notion is not configured
+- Non-blocking - processing continues even if Notion save fails
+
 ## External Dependencies
 
 - **FFmpeg** - Must be installed system-wide for audio processing (brew install ffmpeg on Mac)
 - **yt-dlp** - YouTube downloader (handles both public and membership content)
 - **OpenAI Whisper** - Local speech-to-text transcription
 - **OpenRouter API** - Cloud-based AI summarization using deepseek/deepseek-r1 model
+- **Notion API** (Optional) - Cloud-based knowledge management integration
 
 ## Testing Notes
 

@@ -196,42 +196,67 @@ class Summarizer:
         logger.info(f"Summary saved: {output_path}")
 
 
-def summarize_transcript(transcript: str, video_id: str, 
+def summarize_transcript(transcript: str, video_id: str,
                         video_info: Optional[Dict] = None,
                         style: str = "detailed",
-                        video_url: Optional[str] = None) -> Dict[str, Path]:
+                        video_url: Optional[str] = None) -> Dict:
     """
     总结转录文本（便捷函数）
-    
+
     Args:
         transcript: 转录文本
         video_id: 视频 ID
         video_info: 视频信息
         style: 总结风格
         video_url: 视频 URL
-        
+
     Returns:
-        包含文件路径的字典
+        包含文件路径和 Notion URL 的字典
     """
     from .utils import create_report_filename
-    
+    from .notion_handler import save_to_notion
+
     summarizer = Summarizer()
     summary = summarizer.summarize(transcript, style=style)
-    
+
     # 保存到 summaries 目录（原有功能）
     summary_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
     summarizer.save_summary(summary, summary_path, video_info)
-    
-    # 保存到 reports 目录（新增功能，带时间戳和标题）
+
+    # 保存到 reports 目录（新增功能，带时间戳、上传者和内容标题）
+    report_path = None
+    notion_url = None
+
     if video_info and video_info.get('title'):
-        report_filename = create_report_filename(video_info['title'])
+        # 生成新的文件名格式：时间戳_上传者_内容标题.md
+        uploader = video_info.get('uploader', '')
+        report_filename = create_report_filename(
+            video_info['title'],
+            uploader=uploader,
+            summary=summary
+        )
         report_path = config.REPORT_DIR / report_filename
+
+        # 保存到本地文件
         summarizer.save_summary(summary, report_path, video_info, video_id, video_url)
         logger.info(f"Report saved: {report_path}")
-    else:
-        report_path = None
-    
+
+        # 保存到 Notion（如果配置了）
+        try:
+            notion_url = save_to_notion(
+                title=video_info['title'],
+                content=summary,
+                video_info=video_info,
+                video_url=video_url
+            )
+            if notion_url:
+                logger.info(f"Notion page created: {notion_url}")
+        except Exception as e:
+            logger.error(f"Failed to save to Notion: {e}")
+            # 即使 Notion 保存失败，也不影响整体流程
+
     return {
         'summary_path': summary_path,
-        'report_path': report_path
+        'report_path': report_path,
+        'notion_url': notion_url
     }

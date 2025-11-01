@@ -6,23 +6,25 @@ load_dotenv()
 
 class Config:
     """配置类 - 管理所有环境变量和路径设置"""
-    
+
     # API Keys
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
-    
+    NOTION_API_KEY = os.getenv('NOTION_API_KEY', '')
+    NOTION_DATABASE_ID = os.getenv('NOTION_DATABASE_ID', '')
+
     # Whisper
     WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')
     WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'zh')
-    
+
     # Audio
     AUDIO_QUALITY = os.getenv('AUDIO_QUALITY', '64')
     AUDIO_FORMAT = os.getenv('AUDIO_FORMAT', 'mp3')
     KEEP_AUDIO = os.getenv('KEEP_AUDIO', 'false').lower() == 'true'
-    
+
     # Browser
     BROWSER_TYPE = os.getenv('BROWSER_TYPE', 'chrome')
     USE_COOKIES_FILE = os.getenv('USE_COOKIES_FILE', 'false').lower() == 'true'
-    
+
     # Paths
     BASE_DIR = Path(__file__).parent.parent
     OUTPUT_DIR = BASE_DIR / os.getenv('OUTPUT_DIR', 'output')

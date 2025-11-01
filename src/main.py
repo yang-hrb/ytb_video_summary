@@ -136,12 +136,16 @@ def process_video(
         transcript_file = config.TRANSCRIPT_DIR / f"{video_id}_transcript.srt"
         summary_file = summary_result['summary_path']
         report_file = summary_result['report_path']
+        notion_url = summary_result.get('notion_url')
 
         print(f"\n{Fore.CYAN}输出文件:{Style.RESET_ALL}")
         print(f"  转录: {transcript_file}")
         print(f"  总结: {summary_file}")
         if report_file:
             print(f"  报告: {report_file}")
+        if notion_url:
+            print(f"\n{Fore.CYAN}Notion 页面:{Style.RESET_ALL}")
+            print(f"  {notion_url}")
 
         print_success("视频处理完成!")
 
@@ -151,7 +155,8 @@ def process_video(
             'transcript': transcript,
             'transcript_file': transcript_file,
             'summary_file': summary_file,
-            'report_file': report_file
+            'report_file': report_file,
+            'notion_url': notion_url
         }
 
     except Exception as e:
