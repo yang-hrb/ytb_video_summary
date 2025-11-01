@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YouTube Video Transcription & Summarization Tool - A Python CLI application that downloads YouTube videos (including membership content), transcribes audio to text using OpenAI Whisper, and generates AI-powered summaries using OpenRouter API.
+Audio/Video Transcription & Summarization Tool - A Python CLI application that:
+- Downloads YouTube videos (including membership content) and playlists
+- Processes local MP3 files from folders
+- Transcribes audio to text using OpenAI Whisper
+- Generates AI-powered summaries using OpenRouter API
+- Optionally syncs summaries to Notion for knowledge management
 
 ## Essential Development Commands
 
@@ -39,17 +44,21 @@ cp .env.example .env
 # Activate venv first
 source venv/bin/activate
 
-# Single video processing
+# Single YouTube video (default mode)
 python src/main.py "https://youtube.com/watch?v=xxxxx"
+python src/main.py -video "https://youtube.com/watch?v=xxxxx"
 
-# Playlist processing (automatically detects playlist URLs)
-python src/main.py "https://youtube.com/playlist?list=xxxxx"
-python src/main.py "https://youtube.com/watch?v=xxxxx&list=xxxxx"
+# YouTube playlist
+python src/main.py -list "https://youtube.com/playlist?list=xxxxx"
+python src/main.py -list "https://youtube.com/watch?v=xxxxx&list=xxxxx"
 
-# With options (works for both single videos and playlists)
-python src/main.py "URL" --style brief
-python src/main.py "URL" --keep-audio
-python src/main.py "URL" --cookies cookies.txt
+# Local MP3 folder
+python src/main.py -local /path/to/mp3/folder
+python src/main.py -local ./audio_files --style detailed
+
+# With options
+python src/main.py -video "URL" --style brief --keep-audio
+python src/main.py -list "URL" --cookies cookies.txt
 ```
 
 ### Testing
@@ -78,10 +87,13 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 
 **`src/main.py`**
 - CLI entry point with argument parsing
-- Orchestrates the entire pipeline for both single videos and playlists
-- `process_video()` - Processes a single video through the 4-step pipeline
+- Supports three input modes: `-video` (YouTube video), `-list` (YouTube playlist), `-local` (MP3 folder)
+- Orchestrates the entire pipeline for videos, playlists, and local audio files
+- `process_video()` - Processes a single YouTube video through the 4-step pipeline
 - `process_playlist()` - Processes all videos in a YouTube playlist sequentially
-- Automatically detects playlist URLs and routes to appropriate handler
+- `process_local_mp3()` - Processes a single local MP3 file through the 3-step pipeline
+- `process_local_folder()` - Batch processes all MP3 files in a folder
+- Automatically detects URLs and routes to appropriate handler
 - Handles user interaction with colorama-formatted output
 - Manages configuration validation before processing
 
@@ -170,23 +182,38 @@ The Config class auto-creates all required directories (`output/`, `temp/`, subd
 ### Python API Usage
 The tool can be imported and used programmatically:
 ```python
-from src.main import process_video, process_playlist
+from src.main import process_video, process_playlist, process_local_mp3, process_local_folder
+from pathlib import Path
 
-# Process single video
+# Process single YouTube video
 result = process_video(
     url="https://youtube.com/watch?v=xxxxx",
     keep_audio=False,
     summary_style="detailed"
 )
-# Returns dict with: video_id, video_info, transcript, transcript_file, summary_file, report_file
+# Returns dict with: video_id, video_info, transcript, transcript_file, summary_file, report_file, notion_url
 
-# Process playlist
+# Process YouTube playlist
 results = process_playlist(
     playlist_url="https://youtube.com/playlist?list=xxxxx",
     keep_audio=False,
     summary_style="detailed"
 )
 # Returns list of result dicts, one for each successfully processed video
+
+# Process single local MP3 file
+result = process_local_mp3(
+    mp3_path=Path("/path/to/audio.mp3"),
+    summary_style="detailed"
+)
+# Returns dict with: file_name, file_path, transcript, transcript_file, summary_file, report_file, notion_url
+
+# Process folder of MP3 files
+results = process_local_folder(
+    folder_path=Path("/path/to/mp3/folder"),
+    summary_style="detailed"
+)
+# Returns list of result dicts, one for each successfully processed MP3 file
 ```
 
 ### Playlist Support
@@ -202,6 +229,25 @@ The application can process entire YouTube playlists:
 - If a video fails (age-restricted, removed, private, etc.), the error is logged
 - Processing continues with the next video in the playlist
 - Final summary shows count of successful/failed videos with error details
+
+### Local MP3 Support
+The application can process local MP3 files from a folder:
+- Automatically scans folder for all .mp3 files
+- Transcribes each file using Whisper
+- Generates AI summaries for each audio file
+- Optionally uploads to Notion
+- Continues processing even if individual files fail
+- Provides progress tracking and error summary
+
+**Local MP3 Processing Pipeline (3 steps):**
+1. **Transcription** - Convert MP3 to text using Whisper
+2. **AI Summarization** - Generate summary with OpenRouter API
+3. **Output** - Save transcript (SRT), summary, report, and optionally to Notion
+
+**Metadata for Local Files:**
+- Title: MP3 filename (without extension)
+- Uploader: "Local Audio"
+- Duration: Extracted from audio transcription
 
 ### Membership Video Support
 Uses cookies for authentication (works for both single videos and playlists):
