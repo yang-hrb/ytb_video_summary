@@ -39,10 +39,14 @@ cp .env.example .env
 # Activate venv first
 source venv/bin/activate
 
-# Basic usage
+# Single video processing
 python src/main.py "https://youtube.com/watch?v=xxxxx"
 
-# With options
+# Playlist processing (automatically detects playlist URLs)
+python src/main.py "https://youtube.com/playlist?list=xxxxx"
+python src/main.py "https://youtube.com/watch?v=xxxxx&list=xxxxx"
+
+# With options (works for both single videos and playlists)
 python src/main.py "URL" --style brief
 python src/main.py "URL" --keep-audio
 python src/main.py "URL" --cookies cookies.txt
@@ -74,7 +78,10 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 
 **`src/main.py`**
 - CLI entry point with argument parsing
-- Orchestrates the entire pipeline
+- Orchestrates the entire pipeline for both single videos and playlists
+- `process_video()` - Processes a single video through the 4-step pipeline
+- `process_playlist()` - Processes all videos in a YouTube playlist sequentially
+- Automatically detects playlist URLs and routes to appropriate handler
 - Handles user interaction with colorama-formatted output
 - Manages configuration validation before processing
 
@@ -83,6 +90,7 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `get_video_info()` - Extracts metadata without downloading
 - `download_subtitles()` - Attempts to fetch existing subtitles (Chinese/English)
 - `download_audio()` - Downloads best audio quality when subtitles unavailable
+- `get_playlist_videos()` - Extracts all video URLs from a YouTube playlist
 - `process_youtube_video()` - Convenience function that decides subtitle vs audio path
 
 **`src/transcriber.py`**
@@ -107,6 +115,8 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - Filename sanitization and timestamp formatting utilities
 - `create_report_filename()` - Generates timestamped filenames: `YYYYMMDD_HHMM_title.md`
 - `extract_video_id()` - Parses various YouTube URL formats
+- `is_playlist_url()` - Detects if a URL is a YouTube playlist
+- `extract_playlist_id()` - Extracts playlist ID from YouTube URLs
 
 ### Directory Structure
 
@@ -140,18 +150,41 @@ The Config class auto-creates all required directories (`output/`, `temp/`, subd
 ### Python API Usage
 The tool can be imported and used programmatically:
 ```python
-from src.main import process_video
+from src.main import process_video, process_playlist
 
+# Process single video
 result = process_video(
     url="https://youtube.com/watch?v=xxxxx",
     keep_audio=False,
     summary_style="detailed"
 )
 # Returns dict with: video_id, video_info, transcript, transcript_file, summary_file, report_file
+
+# Process playlist
+results = process_playlist(
+    playlist_url="https://youtube.com/playlist?list=xxxxx",
+    keep_audio=False,
+    summary_style="detailed"
+)
+# Returns list of result dicts, one for each successfully processed video
 ```
 
+### Playlist Support
+The application can process entire YouTube playlists:
+- Automatically detects playlist URLs (both `playlist?list=` and `watch?v=xxx&list=` formats)
+- Extracts all video URLs from the playlist using yt-dlp
+- Processes each video sequentially through the standard pipeline
+- Continues processing remaining videos even if individual videos fail
+- Provides progress tracking (e.g., "Processing video [3/10]")
+- Shows summary of successful and failed videos at completion
+
+**Error Handling for Playlists:**
+- If a video fails (age-restricted, removed, private, etc.), the error is logged
+- Processing continues with the next video in the playlist
+- Final summary shows count of successful/failed videos with error details
+
 ### Membership Video Support
-Uses cookies for authentication:
+Uses cookies for authentication (works for both single videos and playlists):
 1. Export browser cookies using "Get cookies.txt" extension
 2. Pass cookies file: `--cookies cookies.txt`
 3. **Security**: cookies.txt is in .gitignore - never commit credentials

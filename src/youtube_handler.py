@@ -1,10 +1,10 @@
 import yt_dlp
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import logging
 
 from config import config
-from .utils import sanitize_filename, extract_video_id, find_ffmpeg_location
+from .utils import sanitize_filename, extract_video_id, find_ffmpeg_location, extract_playlist_id
 
 logger = logging.getLogger(__name__)
 
@@ -159,31 +159,74 @@ class YouTubeHandler:
             return None
 
 
+def get_playlist_videos(playlist_url: str, cookies_file: Optional[str] = None) -> List[str]:
+    """
+    获取播放列表中的所有视频 URL
+
+    Args:
+        playlist_url: YouTube 播放列表 URL
+        cookies_file: cookies.txt 文件路径
+
+    Returns:
+        视频 URL 列表
+    """
+    ydl_opts = {
+        'extract_flat': True,
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    if cookies_file:
+        ydl_opts['cookiefile'] = cookies_file
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            result = ydl.extract_info(playlist_url, download=False)
+
+            if 'entries' not in result:
+                logger.error("No entries found in playlist")
+                return []
+
+            video_urls = []
+            for entry in result['entries']:
+                if entry and 'id' in entry:
+                    video_id = entry['id']
+                    video_url = f"https://www.youtube.com/watch?v={video_id}"
+                    video_urls.append(video_url)
+
+            logger.info(f"Found {len(video_urls)} videos in playlist")
+            return video_urls
+
+    except Exception as e:
+        logger.error(f"Failed to get playlist videos: {e}")
+        raise
+
+
 def process_youtube_video(url: str, cookies_file: Optional[str] = None) -> Dict:
     """
     处理 YouTube 视频（便捷函数）
-    
+
     Args:
         url: YouTube 视频 URL
         cookies_file: cookies.txt 文件路径
-        
+
     Returns:
         包含视频信息和文件路径的字典
     """
     handler = YouTubeHandler(cookies_file)
-    
+
     # 获取视频信息
     info = handler.get_video_info(url)
     video_id = info['id']
-    
+
     # 尝试下载字幕
     subtitle_path = handler.download_subtitles(url, video_id)
-    
+
     # 如果没有字幕，下载音频用于转录
     audio_path = None
     if subtitle_path is None:
         audio_path = handler.download_audio(url, video_id)
-    
+
     return {
         'info': info,
         'video_id': video_id,

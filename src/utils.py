@@ -129,10 +129,10 @@ def get_file_size_mb(file_path: Path) -> float:
 def extract_video_id(url: str) -> Optional[str]:
     """
     从 YouTube URL 中提取视频 ID
-    
+
     Args:
         url: YouTube URL
-        
+
     Returns:
         视频 ID 或 None
     """
@@ -141,12 +141,52 @@ def extract_video_id(url: str) -> Optional[str]:
         r'youtube\.com\/embed\/([^&\n?#]+)',
         r'youtube\.com\/v\/([^&\n?#]+)'
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
             return match.group(1)
-    
+
+    return None
+
+
+def is_playlist_url(url: str) -> bool:
+    """
+    检测 URL 是否为 YouTube 播放列表
+
+    Args:
+        url: YouTube URL
+
+    Returns:
+        True 如果是播放列表 URL，否则 False
+    """
+    playlist_patterns = [
+        r'youtube\.com\/playlist\?list=',
+        r'youtube\.com\/watch\?.*list=',
+    ]
+
+    for pattern in playlist_patterns:
+        if re.search(pattern, url):
+            return True
+
+    return False
+
+
+def extract_playlist_id(url: str) -> Optional[str]:
+    """
+    从 YouTube URL 中提取播放列表 ID
+
+    Args:
+        url: YouTube URL
+
+    Returns:
+        播放列表 ID 或 None
+    """
+    pattern = r'[?&]list=([^&\n?#]+)'
+    match = re.search(pattern, url)
+    if match:
+        return match.group(1)
+
     return None
 
 
