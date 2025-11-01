@@ -11,115 +11,115 @@ logger = logging.getLogger(__name__)
 
 
 class Summarizer:
-    """使用 OpenRouter API 进行文本总结"""
-    
+    """Use OpenRouter API for text summarization"""
+
     def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-r1"):
         """
-        初始化总结器
-        
+        Initialize summarizer
+
         Args:
             api_key: OpenRouter API Key
-            model: 使用的模型名称
+            model: Model name to use
         """
         self.api_key = api_key or config.OPENROUTER_API_KEY
         self.model = model
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
-        
+
         if not self.api_key:
             raise ValueError("OpenRouter API key is required")
-    
+
     def create_prompt(self, transcript: str, style: str = "detailed") -> str:
         """
-        创建总结提示词
-        
+        Create summary prompt
+
         Args:
-            transcript: 视频转录文本
-            style: 总结风格 (brief/detailed)
-            
+            transcript: Video transcript text
+            style: Summary style (brief/detailed)
+
         Returns:
-            格式化的提示词
+            Formatted prompt
         """
         if style == "brief":
-            prompt = f"""请用中文总结以下视频内容，要求简洁明了：
+            prompt = f"""Please summarize the following video content concisely:
 
-1. 用 2-3 句话概括核心内容
-2. 列出 3-5 个关键要点
-3. 提炼 1-2 个核心见解
+1. Summarize the core content in 2-3 sentences
+2. List 3-5 key points
+3. Extract 1-2 core insights
 
-视频转录：
+Video transcript:
 {transcript}
 
-请按照以下格式输出：
+Please output in the following format:
 
-## 📝 内容摘要
-[简短总结]
+## 📝 Content Summary
+[Brief summary]
 
-## 🎯 关键要点
-- 要点 1
-- 要点 2
-- 要点 3
+## 🎯 Key Points
+- Point 1
+- Point 2
+- Point 3
 
-## 💡 核心见解
-[深度见解]
+## 💡 Core Insights
+[Deep insights]
 """
         else:  # detailed
-            prompt = f"""请用中文详细总结以下视频内容：
+            prompt = f"""Please summarize the following video content in detail:
 
-1. 用 3-5 句话概括核心内容
-2. 列出所有重要要点（5-10 个）
-3. 如果可能，创建时间轴摘要
-4. 提供深度分析和见解
+1. Summarize the core content in 3-5 sentences
+2. List all important points (5-10 items)
+3. Create a timeline summary if possible
+4. Provide in-depth analysis and insights
 
-视频转录：
+Video transcript:
 {transcript}
 
-请按照以下格式输出：
+Please output in the following format:
 
-## 📝 内容摘要
-[详细总结]
+## 📝 Content Summary
+[Detailed summary]
 
-## 🎯 关键要点
-- 要点 1
-- 要点 2
-- 要点 3
-[更多要点...]
+## 🎯 Key Points
+- Point 1
+- Point 2
+- Point 3
+[More points...]
 
-## ⏱ 时间轴
-- 00:00 - 主题 1
-- 05:30 - 主题 2
-[更多时间点...]
+## ⏱ Timeline
+- 00:00 - Topic 1
+- 05:30 - Topic 2
+[More timestamps...]
 
-## 💡 核心见解
-[深度分析]
+## 💡 Core Insights
+[In-depth analysis]
 
-## 🔍 补充说明
-[其他重要信息]
+## 🔍 Additional Notes
+[Other important information]
 """
-        
+
         return prompt
-    
-    def summarize(self, transcript: str, style: str = "detailed", 
+
+    def summarize(self, transcript: str, style: str = "detailed",
                   max_tokens: int = 2000) -> str:
         """
-        使用 AI 总结文本
-        
+        Summarize text using AI
+
         Args:
-            transcript: 转录文本
-            style: 总结风格
-            max_tokens: 最大 token 数
-            
+            transcript: Transcript text
+            style: Summary style
+            max_tokens: Maximum token count
+
         Returns:
-            总结文本
+            Summary text
         """
         prompt = self.create_prompt(transcript, style)
-        
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/ytb_video_summary",
             "X-Title": "YouTube Video Summarizer"
         }
-        
+
         payload = {
             "model": self.model,
             "messages": [
@@ -131,7 +131,7 @@ class Summarizer:
             "max_tokens": max_tokens,
             "temperature": 0.7
         }
-        
+
         try:
             logger.info("Sending request to OpenRouter API...")
             response = requests.post(
@@ -141,13 +141,13 @@ class Summarizer:
                 timeout=60
             )
             response.raise_for_status()
-            
+
             result = response.json()
             summary = result['choices'][0]['message']['content']
-            
+
             logger.info("Summary generated successfully")
             return summary.strip()
-            
+
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {e}")
             if hasattr(e, 'response') and e.response is not None:
@@ -156,43 +156,43 @@ class Summarizer:
         except (KeyError, IndexError) as e:
             logger.error(f"Failed to parse API response: {e}")
             raise
-    
-    def save_summary(self, summary: str, output_path: Path, 
+
+    def save_summary(self, summary: str, output_path: Path,
                      video_info: Optional[Dict] = None, video_id: Optional[str] = None,
                      video_url: Optional[str] = None):
         """
-        保存总结到文件
-        
+        Save summary to file
+
         Args:
-            summary: 总结文本
-            output_path: 输出文件路径
-            video_info: 视频信息（用于生成头部）
-            video_id: 视频 ID（用于添加引用）
-            video_url: 视频 URL（用于添加引用）
+            summary: Summary text
+            output_path: Output file path
+            video_info: Video information (for generating header)
+            video_id: Video ID (for adding reference)
+            video_url: Video URL (for adding reference)
         """
         content = ""
-        
-        # 添加头部信息
+
+        # Add header information
         if video_info:
             title = video_info.get('title', 'Unknown')
             duration = format_duration(video_info.get('duration', 0))
             content = create_summary_header(title, duration)
-        
-        # 添加总结内容
+
+        # Add summary content
         content += summary
-        
-        # 添加引用信息
+
+        # Add reference information
         if video_id or video_url:
-            content += "\n\n---\n\n## 📎 参考信息\n\n"
+            content += "\n\n---\n\n## 📎 Reference Information\n\n"
             if video_id:
-                content += f"**视频 ID**: `{video_id}`\n\n"
+                content += f"**Video ID**: `{video_id}`\n\n"
             if video_url:
-                content += f"**视频链接**: {video_url}\n"
-        
-        # 保存文件
+                content += f"**Video Link**: {video_url}\n"
+
+        # Save file
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         logger.info(f"Summary saved: {output_path}")
 
 
@@ -201,17 +201,17 @@ def summarize_transcript(transcript: str, video_id: str,
                         style: str = "detailed",
                         video_url: Optional[str] = None) -> Dict:
     """
-    总结转录文本（便捷函数）
+    Summarize transcript text (convenience function)
 
     Args:
-        transcript: 转录文本
-        video_id: 视频 ID
-        video_info: 视频信息
-        style: 总结风格
-        video_url: 视频 URL
+        transcript: Transcript text
+        video_id: Video ID
+        video_info: Video information
+        style: Summary style
+        video_url: Video URL
 
     Returns:
-        包含文件路径和 Notion URL 的字典
+        Dictionary containing file paths and Notion URL
     """
     from .utils import create_report_filename
     from .notion_handler import save_to_notion
@@ -219,16 +219,16 @@ def summarize_transcript(transcript: str, video_id: str,
     summarizer = Summarizer()
     summary = summarizer.summarize(transcript, style=style)
 
-    # 保存到 summaries 目录（原有功能）
+    # Save to summaries directory (original functionality)
     summary_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
     summarizer.save_summary(summary, summary_path, video_info)
 
-    # 保存到 reports 目录（新增功能，带时间戳、上传者和内容标题）
+    # Save to reports directory (new feature with timestamp, uploader, and content title)
     report_path = None
     notion_url = None
 
     if video_info and video_info.get('title'):
-        # 生成新的文件名格式：时间戳_上传者_内容标题.md
+        # Generate new filename format: timestamp_uploader_content-title.md
         uploader = video_info.get('uploader', '')
         report_filename = create_report_filename(
             video_info['title'],
@@ -237,11 +237,11 @@ def summarize_transcript(transcript: str, video_id: str,
         )
         report_path = config.REPORT_DIR / report_filename
 
-        # 保存到本地文件
+        # Save to local file
         summarizer.save_summary(summary, report_path, video_info, video_id, video_url)
         logger.info(f"Report saved: {report_path}")
 
-        # 保存到 Notion（如果配置了）
+        # Save to Notion (if configured)
         try:
             notion_url = save_to_notion(
                 title=video_info['title'],
@@ -253,7 +253,7 @@ def summarize_transcript(transcript: str, video_id: str,
                 logger.info(f"Notion page created: {notion_url}")
         except Exception as e:
             logger.error(f"Failed to save to Notion: {e}")
-            # 即使 Notion 保存失败，也不影响整体流程
+            # Even if Notion save fails, don't affect overall flow
 
     return {
         'summary_path': summary_path,
