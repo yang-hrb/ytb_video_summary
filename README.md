@@ -1,28 +1,31 @@
-# YouTube 视频转录与总结工具
+# YouTube Video Transcription & Summarization Tool
 
-🎥 自动将 YouTube 视频（包括会员视频）转录为文字并生成 AI 智能总结
+🎥 Automatically transcribe YouTube videos (including membership content) to text and generate AI-powered summaries
 
-## ✨ 特性
+## ✨ Features
 
-- ✅ 支持 YouTube 普通视频和会员视频
-- ✅ 自动提取或生成字幕
-- ✅ AI 智能总结视频内容（使用 OpenRouter 免费模型）
-- ✅ 节省存储空间（可选删除音频）
-- ✅ 支持多种总结风格（简短/详细）
-- ✅ 带时间戳的字幕文件（SRT 格式）
+- ✅ Support for YouTube public and membership videos
+- ✅ Automatic subtitle extraction or generation
+- ✅ AI-powered video content summarization (using OpenRouter free models)
+- ✅ Save storage space (optional audio deletion)
+- ✅ Multiple summary styles (brief/detailed)
+- ✅ Timestamped subtitle files (SRT format)
+- ✅ YouTube playlist processing support
+- ✅ Local MP3 file processing support
+- ✅ Optional Notion integration for knowledge management
 
-## 📋 系统要求
+## 📋 System Requirements
 
 - Python 3.9+
 - FFmpeg 4.0+
-- 8GB+ RAM（推荐 16GB）
-- OpenRouter API Key（免费）
+- 8GB+ RAM (16GB recommended)
+- OpenRouter API Key (free)
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
-**安装 FFmpeg**
+**Install FFmpeg**
 
 ```bash
 # Mac
@@ -32,251 +35,281 @@ brew install ffmpeg
 sudo apt install ffmpeg
 
 # Windows
-# 从 https://ffmpeg.org 下载并添加到 PATH
+# Download from https://ffmpeg.org and add to PATH
 ```
 
-**安装 Python 依赖**
+**Install Python Dependencies**
 
 ```bash
-# 创建虚拟环境
+# Create virtual environment
 python -m venv venv
 
-# 激活虚拟环境
+# Activate virtual environment
 # Windows
 venv\Scripts\activate
 # Mac/Linux
 source venv/bin/activate
 
-# 安装依赖
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. 配置环境变量
+### 2. Configure Environment Variables
 
 ```bash
-# 复制环境变量模板
+# Copy environment template
 cp .env.example .env
 
-# 编辑 .env 文件，填入你的 OpenRouter API Key
+# Edit .env file and add your OpenRouter API Key
 # OPENROUTER_API_KEY=your_api_key_here
 ```
 
-**获取 OpenRouter API Key:**
-1. 访问 [OpenRouter.ai](https://openrouter.ai/)
-2. 注册账号（免费）
-3. 在设置页面获取 API Key
+**Get OpenRouter API Key:**
+1. Visit [OpenRouter.ai](https://openrouter.ai/)
+2. Sign up for free
+3. Get API Key from settings page
 
-### 3. 运行程序
+### 3. Run the Program
 
-**方式一：使用快捷脚本（推荐）**
+**Method 1: Using Quick Scripts (Recommended)**
 
 ```bash
-# 简单模式 - 只需输入 URL，使用默认设置
+# Simple mode - just enter URL, uses defaults
 ./quick-run.sh
 
-# 完整模式 - 可选择总结风格、是否保留音频等选项
+# Full mode - choose summary style, keep-audio options, etc.
 ./run.sh
 ```
 
-**方式二：手动运行**
+**Method 2: Manual Execution**
 
 ```bash
-# 激活虚拟环境
+# Activate virtual environment
 source venv/bin/activate
 
-# 基础使用
+# Basic usage - single video (default)
 python src/main.py "https://youtube.com/watch?v=xxxxx"
+python src/main.py -video "https://youtube.com/watch?v=xxxxx"
 
-# 简短总结
-python src/main.py "URL" --style brief
+# YouTube playlist
+python src/main.py -list "https://youtube.com/playlist?list=xxxxx"
 
-# 保留音频文件
-python src/main.py "URL" --keep-audio
+# Local MP3 folder
+python src/main.py -local /path/to/mp3/folder
 
-# 使用 cookies（会员视频）
-python src/main.py "URL" --cookies cookies.txt
+# Brief summary
+python src/main.py -video "URL" --style brief
+
+# Keep audio files
+python src/main.py -video "URL" --keep-audio
+
+# Use cookies (for membership videos)
+python src/main.py -video "URL" --cookies cookies.txt
 ```
 
-## 📖 使用说明
+## 📖 Usage Guide
 
-### 命令行参数
+### Command Line Arguments
 
 ```
-python src/main.py <URL> [选项]
+python src/main.py [INPUT] [OPTIONS]
 
-必需参数:
-  URL                    YouTube 视频链接
+Input Arguments (mutually exclusive):
+  -video URL             YouTube video URL (default if no flag specified)
+  -list URL              YouTube playlist URL
+  -local PATH            Local MP3 folder path
 
-可选参数:
-  --cookies FILE         cookies.txt 文件路径（用于会员视频）
-  --keep-audio          保留下载的音频文件
-  --style {brief|detailed}  总结风格（默认: detailed）
+Optional Arguments:
+  --cookies FILE         Path to cookies.txt file (for membership videos)
+  --keep-audio          Keep downloaded audio files
+  --style {brief|detailed}  Summary style (default: detailed)
 ```
 
-### 处理会员视频
+### Processing Membership Videos
 
-1. 安装浏览器扩展 [Get cookies.txt](https://chrome.google.com/webstore/detail/get-cookiestxt/bgaddhkoddajcdgocldbbfleckgcbcid)
-2. 登录 YouTube
-3. 导出 cookies 为 `cookies.txt`
-4. 使用 `--cookies cookies.txt` 参数
+1. Install browser extension [Get cookies.txt](https://chrome.google.com/webstore/detail/get-cookiestxt/bgaddhkoddajcdgocldbbfleckgcbcid)
+2. Log into YouTube
+3. Export cookies as `cookies.txt`
+4. Use `--cookies cookies.txt` parameter
 
-### Python API 调用
+### Python API Usage
 
 ```python
-from src.main import process_video
+from src.main import process_video, process_playlist, process_local_folder
+from pathlib import Path
 
+# Process single video
 result = process_video(
     url="https://youtube.com/watch?v=xxxxx",
     keep_audio=False,
     summary_style="detailed"
 )
 
-print(f"转录文件: {result['transcript_file']}")
-print(f"总结文件: {result['summary_file']}")
-print(f"报告文件: {result['report_file']}")
+# Process playlist
+results = process_playlist(
+    playlist_url="https://youtube.com/playlist?list=xxxxx",
+    keep_audio=False,
+    summary_style="detailed"
+)
+
+# Process local MP3 folder
+results = process_local_folder(
+    folder_path=Path("/path/to/mp3/folder"),
+    summary_style="detailed"
+)
+
+print(f"Transcript file: {result['transcript_file']}")
+print(f"Summary file: {result['summary_file']}")
+print(f"Report file: {result['report_file']}")
+print(f"Notion URL: {result['notion_url']}")
 ```
 
-## 📁 输出文件
+## 📁 Output Files
 
 ```
 output/
 ├── transcripts/
-│   └── [video_id]_transcript.srt      # 字幕文件
+│   └── [video_id]_transcript.srt      # Subtitle file
 ├── summaries/
-│   └── [video_id]_summary.md          # 总结文件（按视频ID命名）
+│   └── [video_id]_summary.md          # Summary file (by video ID)
 └── reports/
-    └── [timestamp]_[视频标题].md       # 报告文件（按时间和标题命名）
+    └── [timestamp]_[uploader]_[title].md  # Report file (timestamped with uploader and title)
 ```
 
-### 报告文件格式
+### Report File Format
 
-报告文件命名格式：`YYYYMMDD_HHMM_视频标题.md`
+Report filename format: `YYYYMMDD_HHMM_[uploader]_[content-title].md`
 
-例如：`20251029_1535_如何学习Python编程.md`
+Example: `20251029_1535_TechChannel_introduction-to-python-programming.md`
 
-文件内容包含：
-- 视频标题和时长
-- AI 生成的总结
-- 参考信息（视频 ID 和 URL）
+File contains:
+- Video title and duration
+- AI-generated summary
+- Reference information (video ID and URL)
 
-### 总结文件格式示例
+### Summary File Format Example
 
 ```markdown
-# 视频标题
+# Video Title
 
-**时长**: 15:30  
-**生成时间**: 2025-10-29 10:30:00
+**Duration**: 15:30
+**Generated**: 2025-10-29 10:30:00
 
-## 📝 内容摘要
-[3-5 句话的核心内容总结]
+## 📝 Content Summary
+[3-5 sentences summarizing core content]
 
-## 🎯 关键要点
-- 要点 1
-- 要点 2
-- 要点 3
+## 🎯 Key Points
+- Point 1
+- Point 2
+- Point 3
 
-## ⏱ 时间轴
-- 00:00 - 开场介绍
-- 02:30 - 主题 1
-- 08:15 - 主题 2
+## ⏱ Timeline
+- 00:00 - Introduction
+- 02:30 - Topic 1
+- 08:15 - Topic 2
 
-## 💡 核心见解
-[深度分析和启发]
+## 💡 Core Insights
+[In-depth analysis and insights]
 
 ---
 
-## 📎 参考信息
+## 📎 Reference Information
 
-**视频 ID**: 
+**Video ID**: `xxxxx`
 
-**视频链接**: 
+**Video Link**: https://youtube.com/watch?v=xxxxx
 ```
 
-## ⚙️ 配置说明
+## ⚙️ Configuration
 
-编辑 `.env` 文件自定义配置：
+Edit `.env` file for custom configuration:
 
 ```bash
-# Whisper 模型大小（tiny/base/small/medium/large）
+# Whisper model size (tiny/base/small/medium/large)
 WHISPER_MODEL=base
 
-# 语言设置（zh/en/auto）
+# Language setting (zh/en/auto)
 WHISPER_LANGUAGE=zh
 
-# 音频质量（kbps）
+# Audio quality (kbps)
 AUDIO_QUALITY=64
 
-# 是否保留音频
+# Keep audio files
 KEEP_AUDIO=false
+
+# Notion Integration (optional)
+NOTION_API_KEY=your_notion_integration_token
+NOTION_DATABASE_ID=your_notion_database_id
 ```
 
-**模型选择建议:**
-- `tiny`: 最快，准确度较低（适合快速测试）
-- `base`: 平衡速度和准确度（推荐）
-- `small`: 更准确，速度较慢
-- `medium/large`: 最准确，需要更多资源
+**Model Selection Guide:**
+- `tiny`: Fastest, lower accuracy (good for quick testing)
+- `base`: Balanced speed and accuracy (recommended)
+- `small`: More accurate, slower
+- `medium/large`: Most accurate, requires more resources
 
-## 🧪 运行测试
+## 🧪 Running Tests
 
 ```bash
-# 运行所有测试
+# Run all tests
 python -m unittest discover tests
 
-# 运行特定测试
+# Run specific tests
 python -m unittest tests.test_youtube
 python -m unittest tests.test_transcriber
 python -m unittest tests.test_summarizer
 ```
 
-## ⚠️ 注意事项
+## ⚠️ Important Notes
 
-### 安全与合规
-- ⚠️ **切勿**将 `cookies.txt` 提交到 Git
-- ⚠️ **切勿**分享或二次分发会员内容
-- ⚠️ **仅用于**个人学习使用
-- ⚠️ 遵守 YouTube 服务条款
+### Security & Compliance
+- ⚠️ **DO NOT** commit `cookies.txt` to Git
+- ⚠️ **DO NOT** share or redistribute membership content
+- ⚠️ **USE ONLY** for personal learning
+- ⚠️ Follow YouTube Terms of Service
 
-### 性能建议
-- 长视频（>1小时）建议使用 `tiny` 或 `base` 模型
-- 批量处理时注意 API 速率限制
-- 首次运行会下载 Whisper 模型（~150MB for base）
+### Performance Tips
+- For long videos (>1 hour), use `tiny` or `base` model
+- Watch for API rate limits when batch processing
+- First run downloads Whisper model (~150MB for base)
 
-## 🐛 故障排除
+## 🐛 Troubleshooting
 
-### HTTP 403 错误
+### HTTP 403 Error
 ```bash
-# 更新 yt-dlp
+# Update yt-dlp
 pip install -U yt-dlp
 ```
 
-### Cookies 过期
-重新导出浏览器 cookies
+### Expired Cookies
+Re-export browser cookies
 
-### Whisper 转录太慢
-- 降低模型大小（使用 `tiny` 或 `base`）
-- 或安装 `faster-whisper`（可选）
+### Slow Whisper Transcription
+- Use smaller model (`tiny` or `base`)
+- Or install `faster-whisper` (optional)
 
-### API 限流
-程序会自动重试，如果频繁失败，稍后再试
+### API Rate Limiting
+Program will auto-retry. If frequent failures occur, wait and try later
 
-### FFmpeg 未找到
-确保 FFmpeg 已安装并添加到系统 PATH
+### FFmpeg Not Found
+Ensure FFmpeg is installed and added to system PATH
 
-## 📚 技术栈
+## 📚 Technology Stack
 
-- **yt-dlp**: YouTube 视频下载
-- **OpenAI Whisper**: 语音转文字
-- **OpenRouter**: AI 文本总结
-- **FFmpeg**: 音频处理
+- **yt-dlp**: YouTube video downloading
+- **OpenAI Whisper**: Speech-to-text transcription
+- **OpenRouter**: AI text summarization
+- **FFmpeg**: Audio processing
+- **Notion API**: Knowledge management integration (optional)
 
-## 🔮 未来计划
+## 🔮 Future Plans
 
-- [ ] 支持批量处理多个视频
-- [ ] 添加 Web UI 界面
-- [ ] 支持更多视频平台（Bilibili、Vimeo）
-- [ ] 多语言翻译功能
-- [ ] 导出 PDF/Word 格式
-- [ ] 视频关键帧截图
+- [ ] Support for batch processing multiple videos
+- [ ] Web UI interface
+- [ ] Support for more video platforms (Bilibili, Vimeo)
+- [ ] Multi-language translation features
+- [ ] Export to PDF/Word formats
+- [ ] Video keyframe screenshots
 
 ## 📄 License
 
@@ -284,4 +317,4 @@ MIT License
 
 ---
 
-**最后更新**: 2025-10-29  
+**Last Updated**: 2025-11-01
