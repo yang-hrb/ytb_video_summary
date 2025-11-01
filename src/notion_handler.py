@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 class NotionHandler:
-    """处理 Notion 页面创建和内容上传"""
+    """Handle Notion page creation and content upload"""
 
     def __init__(self, api_key: Optional[str] = None, database_id: Optional[str] = None):
         """
-        初始化 Notion 处理器
+        Initialize Notion handler
 
         Args:
             api_key: Notion Integration Token
@@ -35,10 +35,10 @@ class NotionHandler:
 
     def _get_headers(self) -> Dict[str, str]:
         """
-        获取 Notion API 请求头
+        Get Notion API request headers
 
         Returns:
-            请求头字典
+            Headers dictionary
         """
         return {
             "Authorization": f"Bearer {self.api_key}",
@@ -48,13 +48,13 @@ class NotionHandler:
 
     def markdown_to_notion_blocks(self, content: str) -> list:
         """
-        将 Markdown 内容转换为 Notion blocks
+        Convert Markdown content to Notion blocks
 
         Args:
-            content: Markdown 格式的内容
+            content: Markdown formatted content
 
         Returns:
-            Notion blocks 列表
+            List of Notion blocks
         """
         blocks = []
         lines = content.split('\n')
@@ -63,12 +63,12 @@ class NotionHandler:
         while i < len(lines):
             line = lines[i].strip()
 
-            # 空行
+            # Empty line
             if not line:
                 i += 1
                 continue
 
-            # 标题
+            # Heading
             if line.startswith('#'):
                 level = len(line) - len(line.lstrip('#'))
                 text = line.lstrip('#').strip()
@@ -98,7 +98,7 @@ class NotionHandler:
                         }
                     })
 
-            # 列表项
+            # List item
             elif line.startswith('- ') or line.startswith('* '):
                 text = line[2:].strip()
                 blocks.append({
@@ -109,7 +109,7 @@ class NotionHandler:
                     }
                 })
 
-            # 分隔线
+            # Divider
             elif line.startswith('---'):
                 blocks.append({
                     "object": "block",
@@ -117,9 +117,9 @@ class NotionHandler:
                     "divider": {}
                 })
 
-            # 普通段落
+            # Regular paragraph
             else:
-                # 处理可能的粗体标记
+                # Handle possible bold markers
                 text = line.replace('**', '')
                 blocks.append({
                     "object": "block",
@@ -137,23 +137,23 @@ class NotionHandler:
                    video_info: Optional[Dict] = None,
                    video_url: Optional[str] = None) -> Optional[str]:
         """
-        在 Notion 数据库中创建新页面
+        Create new page in Notion database
 
         Args:
-            title: 页面标题
-            content: Markdown 格式的内容
-            video_info: 视频信息
-            video_url: 视频 URL
+            title: Page title
+            content: Markdown formatted content
+            video_info: Video information
+            video_url: Video URL
 
         Returns:
-            创建的页面 URL，失败时返回 None
+            Created page URL, or None if failed
         """
         if not self.enabled:
             logger.info("Notion integration is disabled. Skipping...")
             return None
 
         try:
-            # 准备页面属性
+            # Prepare page properties
             properties = {
                 "Name": {
                     "title": [
@@ -165,13 +165,13 @@ class NotionHandler:
                 }
             }
 
-            # 添加视频 URL 属性（如果数据库有 URL 列）
+            # Add video URL property (if database has URL column)
             if video_url:
                 properties["URL"] = {
                     "url": video_url
                 }
 
-            # 添加上传者属性（如果数据库有 Uploader 列）
+            # Add uploader property (if database has Uploader column)
             if video_info and video_info.get('uploader'):
                 properties["Uploader"] = {
                     "rich_text": [
@@ -182,7 +182,7 @@ class NotionHandler:
                     ]
                 }
 
-            # 添加时长属性（如果数据库有 Duration 列）
+            # Add duration property (if database has Duration column)
             if video_info and video_info.get('duration'):
                 from .utils import format_duration
                 duration_str = format_duration(video_info['duration'])
@@ -195,14 +195,14 @@ class NotionHandler:
                     ]
                 }
 
-            # 转换内容为 Notion blocks
+            # Convert content to Notion blocks
             blocks = self.markdown_to_notion_blocks(content)
 
-            # 创建页面
+            # Create page
             payload = {
                 "parent": {"database_id": self.database_id},
                 "properties": properties,
-                "children": blocks[:100]  # Notion API 限制一次最多100个blocks
+                "children": blocks[:100]  # Notion API limits to 100 blocks per request
             }
 
             response = requests.post(
@@ -230,14 +230,14 @@ class NotionHandler:
 
     def append_blocks(self, page_id: str, blocks: list) -> bool:
         """
-        向已存在的页面追加更多 blocks（用于内容超过100个blocks的情况）
+        Append more blocks to an existing page (for content exceeding 100 blocks)
 
         Args:
-            page_id: Notion 页面 ID
-            blocks: 要追加的 blocks 列表
+            page_id: Notion page ID
+            blocks: List of blocks to append
 
         Returns:
-            成功返回 True，失败返回 False
+            True if successful, False if failed
         """
         if not self.enabled:
             return False
@@ -261,16 +261,16 @@ def save_to_notion(title: str, content: str,
                   video_info: Optional[Dict] = None,
                   video_url: Optional[str] = None) -> Optional[str]:
     """
-    保存内容到 Notion（便捷函数）
+    Save content to Notion (convenience function)
 
     Args:
-        title: 页面标题
-        content: Markdown 内容
-        video_info: 视频信息
-        video_url: 视频 URL
+        title: Page title
+        content: Markdown content
+        video_info: Video information
+        video_url: Video URL
 
     Returns:
-        Notion 页面 URL，失败时返回 None
+        Notion page URL, or None if failed
     """
     handler = NotionHandler()
     return handler.create_page(title, content, video_info, video_url)

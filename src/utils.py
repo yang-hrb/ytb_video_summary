@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
 
-# 配置日志
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -16,20 +16,20 @@ logger = logging.getLogger(__name__)
 
 def sanitize_filename(filename: str, max_length: int = 200) -> str:
     """
-    清理文件名，移除非法字符
-    
+    Sanitize filename by removing illegal characters
+
     Args:
-        filename: 原始文件名
-        max_length: 最大长度
-        
+        filename: Original filename
+        max_length: Maximum length
+
     Returns:
-        清理后的文件名
+        Sanitized filename
     """
-    # 移除非法字符
+    # Remove illegal characters
     filename = re.sub(r'[<>:"/\\|?*]', '', filename)
-    # 移除多余的空格
+    # Remove extra spaces
     filename = re.sub(r'\s+', ' ', filename).strip()
-    # 限制长度
+    # Limit length
     if len(filename) > max_length:
         filename = filename[:max_length]
     return filename
@@ -37,58 +37,58 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
 
 def extract_summary_title(summary: str, max_length: int = 50) -> str:
     """
-    从总结内容中提取标题
+    Extract title from summary content
 
     Args:
-        summary: AI 生成的总结内容
-        max_length: 标题最大长度
+        summary: AI-generated summary content
+        max_length: Maximum title length
 
     Returns:
-        提取的标题
+        Extracted title
     """
-    # 尝试从摘要部分提取标题
+    # Try to extract title from summary section
     lines = summary.split('\n')
     for line in lines:
         line = line.strip()
-        # 跳过标题标记和空行
+        # Skip heading markers and empty lines
         if line and not line.startswith('#') and not line.startswith('**') and len(line) > 10:
-            # 移除可能的列表符号
+            # Remove possible list markers
             title = line.lstrip('-•*> ').strip()
             if title:
-                # 限制长度并清理
+                # Limit length and sanitize
                 title = sanitize_filename(title, max_length=max_length)
                 return title
 
-    # 如果无法提取，返回默认值
+    # Return default if extraction fails
     return "summary"
 
 
 def create_report_filename(video_title: str, uploader: str = "", summary: str = "") -> str:
     """
-    创建报告文件名：时间戳_上传者_内容标题.md
+    Create report filename: timestamp_uploader_content-title.md
 
     Args:
-        video_title: 视频标题（用作后备）
-        uploader: 上传者名称（取前10个字符）
-        summary: 总结内容（用于生成内容相关的标题）
+        video_title: Video title (used as fallback)
+        uploader: Uploader name (first 10 characters)
+        summary: Summary content (for generating content-related title)
 
     Returns:
-        格式化的文件名
+        Formatted filename
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
 
-    # 处理上传者名称（取前10个字符）
+    # Process uploader name (first 10 characters)
     uploader_part = ""
     if uploader:
         clean_uploader = sanitize_filename(uploader, max_length=10)
         if clean_uploader:
             uploader_part = f"{clean_uploader}_"
 
-    # 从总结内容中提取标题
+    # Extract title from summary content
     if summary:
         content_title = extract_summary_title(summary, max_length=50)
     else:
-        # 如果没有总结，使用视频标题
+        # Use video title if no summary
         content_title = sanitize_filename(video_title, max_length=50)
 
     return f"{timestamp}_{uploader_part}{content_title}.md"
@@ -96,19 +96,19 @@ def create_report_filename(video_title: str, uploader: str = "", summary: str = 
 
 def format_duration(seconds: int) -> str:
     """
-    将秒数转换为可读的时长格式
-    
+    Convert seconds to readable duration format
+
     Args:
-        seconds: 秒数
-        
+        seconds: Number of seconds
+
     Returns:
-        格式化的时长 (HH:MM:SS 或 MM:SS)
+        Formatted duration (HH:MM:SS or MM:SS)
     """
     duration = timedelta(seconds=seconds)
     hours = duration.seconds // 3600
     minutes = (duration.seconds % 3600) // 60
     secs = duration.seconds % 60
-    
+
     if hours > 0:
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
     else:
@@ -117,33 +117,33 @@ def format_duration(seconds: int) -> str:
 
 def format_timestamp(seconds: float) -> str:
     """
-    将秒数转换为 SRT 时间戳格式
-    
+    Convert seconds to SRT timestamp format
+
     Args:
-        seconds: 秒数
-        
+        seconds: Number of seconds
+
     Returns:
-        SRT 格式时间戳 (HH:MM:SS,mmm)
+        SRT format timestamp (HH:MM:SS,mmm)
     """
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
     millis = int((seconds % 1) * 1000)
-    
+
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
 def clean_temp_files(temp_dir: Path, keep_pattern: Optional[str] = None):
     """
-    清理临时文件
-    
+    Clean temporary files
+
     Args:
-        temp_dir: 临时文件目录
-        keep_pattern: 保留文件的模式（正则表达式）
+        temp_dir: Temporary files directory
+        keep_pattern: Pattern for files to keep (regex)
     """
     if not temp_dir.exists():
         return
-    
+
     for file in temp_dir.iterdir():
         if file.is_file():
             if keep_pattern and re.match(keep_pattern, file.name):
@@ -157,13 +157,13 @@ def clean_temp_files(temp_dir: Path, keep_pattern: Optional[str] = None):
 
 def get_file_size_mb(file_path: Path) -> float:
     """
-    获取文件大小（MB）
-    
+    Get file size in MB
+
     Args:
-        file_path: 文件路径
-        
+        file_path: File path
+
     Returns:
-        文件大小（MB）
+        File size in MB
     """
     if not file_path.exists():
         return 0.0
@@ -172,13 +172,13 @@ def get_file_size_mb(file_path: Path) -> float:
 
 def extract_video_id(url: str) -> Optional[str]:
     """
-    从 YouTube URL 中提取视频 ID
+    Extract video ID from YouTube URL
 
     Args:
         url: YouTube URL
 
     Returns:
-        视频 ID 或 None
+        Video ID or None
     """
     patterns = [
         r'(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)',
@@ -196,13 +196,13 @@ def extract_video_id(url: str) -> Optional[str]:
 
 def is_playlist_url(url: str) -> bool:
     """
-    检测 URL 是否为 YouTube 播放列表
+    Detect if URL is a YouTube playlist
 
     Args:
         url: YouTube URL
 
     Returns:
-        True 如果是播放列表 URL，否则 False
+        True if playlist URL, False otherwise
     """
     playlist_patterns = [
         r'youtube\.com\/playlist\?list=',
@@ -218,13 +218,13 @@ def is_playlist_url(url: str) -> bool:
 
 def extract_playlist_id(url: str) -> Optional[str]:
     """
-    从 YouTube URL 中提取播放列表 ID
+    Extract playlist ID from YouTube URL
 
     Args:
         url: YouTube URL
 
     Returns:
-        播放列表 ID 或 None
+        Playlist ID or None
     """
     pattern = r'[?&]list=([^&\n?#]+)'
     match = re.search(pattern, url)
@@ -236,23 +236,23 @@ def extract_playlist_id(url: str) -> Optional[str]:
 
 def create_summary_header(title: str, duration: str, timestamp: Optional[str] = None) -> str:
     """
-    创建总结文件的标题头部
-    
+    Create summary file header
+
     Args:
-        title: 视频标题
-        duration: 视频时长
-        timestamp: 生成时间戳
-        
+        title: Video title
+        duration: Video duration
+        timestamp: Generation timestamp
+
     Returns:
-        Markdown 格式的头部
+        Markdown formatted header
     """
     if timestamp is None:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     header = f"""# {title}
 
-**时长**: {duration}  
-**生成时间**: {timestamp}
+**Duration**: {duration}
+**Generated**: {timestamp}
 
 ---
 
@@ -262,35 +262,35 @@ def create_summary_header(title: str, duration: str, timestamp: Optional[str] = 
 
 def ensure_dir_exists(directory: Path):
     """
-    确保目录存在，不存在则创建
+    Ensure directory exists, create if it doesn't
 
     Args:
-        directory: 目录路径
+        directory: Directory path
     """
     directory.mkdir(parents=True, exist_ok=True)
 
 
 def find_ffmpeg_location() -> Optional[str]:
     """
-    查找 FFmpeg 可执行文件位置
+    Find FFmpeg executable location
 
     Returns:
-        FFmpeg 目录路径，如果未找到则返回 None
+        FFmpeg directory path, or None if not found
     """
-    # 1. 检查环境变量
+    # 1. Check environment variable
     ffmpeg_env = os.getenv('FFMPEG_LOCATION')
     if ffmpeg_env and Path(ffmpeg_env).exists():
         logger.info(f"Using FFmpeg from environment variable: {ffmpeg_env}")
         return ffmpeg_env
 
-    # 2. 检查 PATH 中的 ffmpeg
+    # 2. Check ffmpeg in PATH
     ffmpeg_path = shutil.which('ffmpeg')
     if ffmpeg_path:
         ffmpeg_dir = str(Path(ffmpeg_path).parent)
         logger.info(f"Found FFmpeg in PATH: {ffmpeg_dir}")
         return ffmpeg_dir
 
-    # 3. 检查常见的安装位置
+    # 3. Check common installation locations
     common_locations = [
         '/opt/homebrew/bin',  # macOS Homebrew (Apple Silicon)
         '/usr/local/bin',     # macOS Homebrew (Intel) / Linux
