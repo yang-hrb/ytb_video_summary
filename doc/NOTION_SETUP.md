@@ -74,7 +74,7 @@ python src/main.py "https://youtube.com/watch?v=test_video_id"
 
 If successful, you should see:
 ```
-Notion 页面:
+Notion page:
   https://www.notion.so/...
 ```
 
