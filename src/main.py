@@ -22,7 +22,7 @@ from src.youtube_handler import process_youtube_video, get_playlist_videos
 from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcriber
 from src.summarizer import summarize_transcript
 from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename
-from src.notion_handler import save_to_notion
+from src.github_handler import upload_to_github
 
 # Initialize colorama
 init(autoreset=True)
@@ -69,7 +69,8 @@ def process_video(
     url: str,
     cookies_file: Optional[str] = None,
     keep_audio: bool = False,
-    summary_style: str = "detailed"
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
 ) -> dict:
     """
     Process a single video through the complete pipeline
@@ -79,6 +80,7 @@ def process_video(
         cookies_file: Path to cookies.txt file
         keep_audio: Whether to keep downloaded audio file
         summary_style: Summary style (brief/detailed)
+        upload_to_github_repo: Whether to upload report to GitHub
 
     Returns:
         Dictionary containing processing results
@@ -95,8 +97,9 @@ def process_video(
         print(f"  Duration: {video_info['duration']}s")
         print(f"  Uploader: {video_info['uploader']}")
 
-        # Step 2: Get transcript text
+        # Step 2: Get transcript text and detect language
         transcript = None
+        detected_language = 'en'
 
         if result['needs_transcription']:
             print_step("2/4", "Transcribing audio with Whisper...")
@@ -104,7 +107,7 @@ def process_video(
             print(f"  Audio file: {audio_path}")
             print(f"  File size: {get_file_size_mb(audio_path):.2f} MB")
 
-            transcript = transcribe_video_audio(audio_path, video_id, save_srt=True)
+            transcript, detected_language = transcribe_video_audio(audio_path, video_id, save_srt=True)
 
             # Clean up audio file
             if not keep_audio and not config.KEEP_AUDIO:
@@ -114,19 +117,22 @@ def process_video(
             print_step("2/4", "Reading subtitle file...")
             subtitle_path = result['subtitle_path']
             print(f"  Subtitle file: {subtitle_path}")
-            transcript = read_subtitle_file(subtitle_path)
+            transcript, detected_language = read_subtitle_file(subtitle_path)
 
         print(f"  Transcript length: {len(transcript)} characters")
+        print(f"  Detected language: {detected_language}")
 
         # Step 3: Generate AI summary
         print_step("3/4", "Generating AI summary...")
         print(f"  Using style: {summary_style}")
+        print(f"  Summary language: {detected_language}")
 
         summary_result = summarize_transcript(
             transcript,
             video_id,
             video_info,
             style=summary_style,
+            language=detected_language,
             video_url=url
         )
 
@@ -136,16 +142,25 @@ def process_video(
         transcript_file = config.TRANSCRIPT_DIR / f"{video_id}_transcript.srt"
         summary_file = summary_result['summary_path']
         report_file = summary_result['report_path']
-        notion_url = summary_result.get('notion_url')
+        github_url = None
 
         print(f"\n{Fore.CYAN}Output files:{Style.RESET_ALL}")
         print(f"  Transcript: {transcript_file}")
         print(f"  Summary: {summary_file}")
         if report_file:
             print(f"  Report: {report_file}")
-        if notion_url:
-            print(f"\n{Fore.CYAN}Notion page:{Style.RESET_ALL}")
-            print(f"  {notion_url}")
+
+        # Upload to GitHub if requested
+        if upload_to_github_repo and report_file:
+            print_step("Bonus", "Uploading report to GitHub...")
+            try:
+                github_url = upload_to_github(report_file)
+                if github_url:
+                    print(f"\n{Fore.CYAN}GitHub:{Style.RESET_ALL}")
+                    print(f"  {github_url}")
+            except Exception as e:
+                logger.error(f"GitHub upload failed: {e}")
+                print(f"{Fore.YELLOW}[WARNING]{Style.RESET_ALL} GitHub upload failed: {e}")
 
         print_success("Video processing complete!")
 
@@ -156,7 +171,7 @@ def process_video(
             'transcript_file': transcript_file,
             'summary_file': summary_file,
             'report_file': report_file,
-            'notion_url': notion_url
+            'github_url': github_url
         }
 
     except Exception as e:
@@ -167,7 +182,8 @@ def process_video(
 
 def process_local_mp3(
     mp3_path: Path,
-    summary_style: str = "detailed"
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
 ) -> dict:
     """
     Process a local MP3 file through the complete pipeline
@@ -175,6 +191,7 @@ def process_local_mp3(
     Args:
         mp3_path: Path to MP3 file
         summary_style: Summary style (brief/detailed)
+        upload_to_github_repo: Whether to upload report to GitHub
 
     Returns:
         Dictionary containing processing results
@@ -192,15 +209,20 @@ def process_local_mp3(
         result = transcriber.transcribe_audio(mp3_path)
         transcript = transcriber.get_transcript_text(result)
 
+        # Detect language from transcription
+        detected_language = result.get('language', 'en')
+
         # Save SRT file
         srt_path = config.TRANSCRIPT_DIR / f"{file_name}_transcript.srt"
         transcriber.save_as_srt(result, srt_path)
 
         print(f"  Transcript length: {len(transcript)} characters")
+        print(f"  Detected language: {detected_language}")
 
         # Step 2: Generate AI summary
         print_step("2/3", "Generating AI summary...")
         print(f"  Using style: {summary_style}")
+        print(f"  Summary language: {detected_language}")
 
         # Create virtual video_info for local files
         video_info = {
@@ -214,6 +236,7 @@ def process_local_mp3(
             file_name,
             video_info,
             style=summary_style,
+            language=detected_language,
             video_url=None
         )
 
@@ -222,16 +245,25 @@ def process_local_mp3(
 
         summary_file = summary_result['summary_path']
         report_file = summary_result['report_path']
-        notion_url = summary_result.get('notion_url')
+        github_url = None
 
         print(f"\n{Fore.CYAN}Output files:{Style.RESET_ALL}")
         print(f"  Transcript: {srt_path}")
         print(f"  Summary: {summary_file}")
         if report_file:
             print(f"  Report: {report_file}")
-        if notion_url:
-            print(f"\n{Fore.CYAN}Notion page:{Style.RESET_ALL}")
-            print(f"  {notion_url}")
+
+        # Upload to GitHub if requested
+        if upload_to_github_repo and report_file:
+            print_step("Bonus", "Uploading report to GitHub...")
+            try:
+                github_url = upload_to_github(report_file)
+                if github_url:
+                    print(f"\n{Fore.CYAN}GitHub:{Style.RESET_ALL}")
+                    print(f"  {github_url}")
+            except Exception as e:
+                logger.error(f"GitHub upload failed: {e}")
+                print(f"{Fore.YELLOW}[WARNING]{Style.RESET_ALL} GitHub upload failed: {e}")
 
         print_success("Audio processing complete!")
 
@@ -242,7 +274,7 @@ def process_local_mp3(
             'transcript_file': srt_path,
             'summary_file': summary_file,
             'report_file': report_file,
-            'notion_url': notion_url
+            'github_url': github_url
         }
 
     except Exception as e:
@@ -253,7 +285,8 @@ def process_local_mp3(
 
 def process_local_folder(
     folder_path: Path,
-    summary_style: str = "detailed"
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
 ) -> list:
     """
     Process all MP3 files in a local folder
@@ -289,7 +322,8 @@ def process_local_folder(
             try:
                 result = process_local_mp3(
                     mp3_file,
-                    summary_style=summary_style
+                    summary_style=summary_style,
+                    upload_to_github_repo=upload_to_github_repo
                 )
                 results.append(result)
             except Exception as e:
@@ -324,7 +358,8 @@ def process_playlist(
     playlist_url: str,
     cookies_file: Optional[str] = None,
     keep_audio: bool = False,
-    summary_style: str = "detailed"
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
 ) -> list:
     """
     Process all videos in a playlist
@@ -367,7 +402,8 @@ def process_playlist(
                     video_url,
                     cookies_file=cookies_file,
                     keep_audio=keep_audio,
-                    summary_style=summary_style
+                    summary_style=summary_style,
+                    upload_to_github_repo=upload_to_github_repo
                 )
                 results.append(result)
             except Exception as e:
@@ -469,6 +505,12 @@ Examples:
         help='Summary style: brief or detailed'
     )
 
+    parser.add_argument(
+        '--upload',
+        action='store_true',
+        help='Upload report files to GitHub repository'
+    )
+
     args = parser.parse_args()
 
     # Print banner
@@ -499,7 +541,8 @@ Examples:
 
             results = process_local_folder(
                 folder_path,
-                summary_style=args.style
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
             )
 
         elif args.list:
@@ -509,7 +552,8 @@ Examples:
                 args.list,
                 cookies_file=args.cookies,
                 keep_audio=args.keep_audio,
-                summary_style=args.style
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
             )
 
         elif args.video:
@@ -519,7 +563,8 @@ Examples:
                 args.video,
                 cookies_file=args.cookies,
                 keep_audio=args.keep_audio,
-                summary_style=args.style
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
             )
 
         elif args.url:
@@ -530,7 +575,8 @@ Examples:
                     args.url,
                     cookies_file=args.cookies,
                     keep_audio=args.keep_audio,
-                    summary_style=args.style
+                    summary_style=args.style,
+                    upload_to_github_repo=args.upload
                 )
             else:
                 print(f"{Fore.YELLOW}Detected YouTube single video{Style.RESET_ALL}\n")
@@ -538,7 +584,8 @@ Examples:
                     args.url,
                     cookies_file=args.cookies,
                     keep_audio=args.keep_audio,
-                    summary_style=args.style
+                    summary_style=args.style,
+                    upload_to_github_repo=args.upload
                 )
 
         else:

@@ -9,8 +9,11 @@ class Config:
 
     # API Keys
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
-    NOTION_API_KEY = os.getenv('NOTION_API_KEY', '')
-    NOTION_DATABASE_ID = os.getenv('NOTION_DATABASE_ID', '')
+
+    # GitHub Integration (optional)
+    GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
+    GITHUB_REPO = os.getenv('GITHUB_REPO', '')  # Format: owner/repo
+    GITHUB_BRANCH = os.getenv('GITHUB_BRANCH', 'main')
 
     # Whisper
     WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')

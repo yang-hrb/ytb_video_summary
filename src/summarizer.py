@@ -28,19 +28,80 @@ class Summarizer:
         if not self.api_key:
             raise ValueError("OpenRouter API key is required")
 
-    def create_prompt(self, transcript: str, style: str = "detailed") -> str:
+    def create_prompt(self, transcript: str, style: str = "detailed", language: str = "en") -> str:
         """
         Create summary prompt
 
         Args:
             transcript: Video transcript text
             style: Summary style (brief/detailed)
+            language: Language for summary output (zh/en)
 
         Returns:
             Formatted prompt
         """
-        if style == "brief":
-            prompt = f"""Please summarize the following video content concisely:
+        if language == "zh":
+            # Chinese prompts
+            if style == "brief":
+                prompt = f"""请简明扼要地总结以下视频内容：
+
+1. 用2-3句话概括核心内容
+2. 列出3-5个关键要点
+3. 提取1-2条核心见解
+
+视频文字稿：
+{transcript}
+
+请按以下格式输出：
+
+## 📝 内容概要
+[简要总结]
+
+## 🎯 关键要点
+- 要点1
+- 要点2
+- 要点3
+
+## 💡 核心见解
+[深度洞察]
+"""
+            else:  # detailed
+                prompt = f"""请详细总结以下视频内容：
+
+1. 用3-5句话概括核心内容
+2. 列出所有重要要点（5-10条）
+3. 如果可能，创建时间线总结
+4. 提供深入的分析和见解
+
+视频文字稿：
+{transcript}
+
+请按以下格式输出：
+
+## 📝 内容概要
+[详细总结]
+
+## 🎯 关键要点
+- 要点1
+- 要点2
+- 要点3
+[更多要点...]
+
+## ⏱ 时间线
+- 00:00 - 主题1
+- 05:30 - 主题2
+[更多时间戳...]
+
+## 💡 核心见解
+[深入分析]
+
+## 🔍 补充说明
+[其他重要信息]
+"""
+        else:
+            # English prompts
+            if style == "brief":
+                prompt = f"""Please summarize the following video content concisely:
 
 1. Summarize the core content in 2-3 sentences
 2. List 3-5 key points
@@ -62,8 +123,8 @@ Please output in the following format:
 ## 💡 Core Insights
 [Deep insights]
 """
-        else:  # detailed
-            prompt = f"""Please summarize the following video content in detail:
+            else:  # detailed
+                prompt = f"""Please summarize the following video content in detail:
 
 1. Summarize the core content in 3-5 sentences
 2. List all important points (5-10 items)
@@ -99,19 +160,20 @@ Please output in the following format:
         return prompt
 
     def summarize(self, transcript: str, style: str = "detailed",
-                  max_tokens: int = 2000) -> str:
+                  language: str = "en", max_tokens: int = 2000) -> str:
         """
         Summarize text using AI
 
         Args:
             transcript: Transcript text
             style: Summary style
+            language: Language for summary output (zh/en)
             max_tokens: Maximum token count
 
         Returns:
             Summary text
         """
-        prompt = self.create_prompt(transcript, style)
+        prompt = self.create_prompt(transcript, style, language)
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -199,6 +261,7 @@ Please output in the following format:
 def summarize_transcript(transcript: str, video_id: str,
                         video_info: Optional[Dict] = None,
                         style: str = "detailed",
+                        language: str = "en",
                         video_url: Optional[str] = None) -> Dict:
     """
     Summarize transcript text (convenience function)
@@ -208,16 +271,16 @@ def summarize_transcript(transcript: str, video_id: str,
         video_id: Video ID
         video_info: Video information
         style: Summary style
+        language: Language for summary output (zh/en)
         video_url: Video URL
 
     Returns:
         Dictionary containing file paths and Notion URL
     """
     from .utils import create_report_filename
-    from .notion_handler import save_to_notion
 
     summarizer = Summarizer()
-    summary = summarizer.summarize(transcript, style=style)
+    summary = summarizer.summarize(transcript, style=style, language=language)
 
     # Save to summaries directory (original functionality)
     summary_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
@@ -225,15 +288,19 @@ def summarize_transcript(transcript: str, video_id: str,
 
     # Save to reports directory (new feature with timestamp, uploader, and content title)
     report_path = None
-    notion_url = None
 
     if video_info and video_info.get('title'):
-        # Generate new filename format: timestamp_uploader_content-title.md
+        # Generate report filename
         uploader = video_info.get('uploader', '')
+
+        # Check if it's a local MP3 file
+        is_local_mp3 = (uploader == 'Local Audio')
+
         report_filename = create_report_filename(
             video_info['title'],
             uploader=uploader,
-            summary=summary
+            summary=summary,
+            is_local_mp3=is_local_mp3
         )
         report_path = config.REPORT_DIR / report_filename
 
@@ -241,22 +308,7 @@ def summarize_transcript(transcript: str, video_id: str,
         summarizer.save_summary(summary, report_path, video_info, video_id, video_url)
         logger.info(f"Report saved: {report_path}")
 
-        # Save to Notion (if configured)
-        try:
-            notion_url = save_to_notion(
-                title=video_info['title'],
-                content=summary,
-                video_info=video_info,
-                video_url=video_url
-            )
-            if notion_url:
-                logger.info(f"Notion page created: {notion_url}")
-        except Exception as e:
-            logger.error(f"Failed to save to Notion: {e}")
-            # Even if Notion save fails, don't affect overall flow
-
     return {
         'summary_path': summary_path,
-        'report_path': report_path,
-        'notion_url': notion_url
+        'report_path': report_path
     }

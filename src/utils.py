@@ -63,20 +63,30 @@ def extract_summary_title(summary: str, max_length: int = 50) -> str:
     return "summary"
 
 
-def create_report_filename(video_title: str, uploader: str = "", summary: str = "") -> str:
+def create_report_filename(video_title: str, uploader: str = "", summary: str = "", is_local_mp3: bool = False) -> str:
     """
-    Create report filename: timestamp_uploader_content-title.md
+    Create report filename
+
+    For local MP3: timestamp_mp3_filename.md
+    For videos: timestamp_uploader_content-title.md
 
     Args:
-        video_title: Video title (used as fallback)
+        video_title: Video title (or MP3 filename without extension)
         uploader: Uploader name (first 10 characters)
         summary: Summary content (for generating content-related title)
+        is_local_mp3: True if processing local MP3 file
 
     Returns:
         Formatted filename
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
 
+    # Special format for local MP3 files: timestamp_mp3_filename.md
+    if is_local_mp3:
+        clean_filename = sanitize_filename(video_title, max_length=100)
+        return f"{timestamp}_mp3_{clean_filename}.md"
+
+    # Standard format for videos: timestamp_uploader_content-title.md
     # Process uploader name (first 10 characters)
     uploader_part = ""
     if uploader:

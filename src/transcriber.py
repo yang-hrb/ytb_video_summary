@@ -126,7 +126,7 @@ class Transcriber:
 
 
 def transcribe_video_audio(audio_path: Path, video_id: str,
-                           save_srt: bool = True, save_txt: bool = False) -> str:
+                           save_srt: bool = True, save_txt: bool = False) -> tuple:
     """
     Transcribe video audio (convenience function)
 
@@ -137,7 +137,7 @@ def transcribe_video_audio(audio_path: Path, video_id: str,
         save_txt: Whether to save plain text file
 
     Returns:
-        Transcript text
+        Tuple of (transcript_text, detected_language)
     """
     transcriber = Transcriber()
     result = transcriber.transcribe_audio(audio_path)
@@ -151,10 +151,32 @@ def transcribe_video_audio(audio_path: Path, video_id: str,
         txt_path = config.TRANSCRIPT_DIR / f"{video_id}_transcript.txt"
         transcriber.save_as_txt(result, txt_path)
 
-    return transcriber.get_transcript_text(result)
+    # Extract detected language
+    detected_language = result.get('language', 'en')
+
+    return transcriber.get_transcript_text(result), detected_language
 
 
-def read_subtitle_file(subtitle_path: Path) -> str:
+def detect_language_from_text(text: str) -> str:
+    """
+    Detect language from text content (simple heuristic)
+
+    Args:
+        text: Text to analyze
+
+    Returns:
+        Detected language code ('zh' or 'en')
+    """
+    # Simple heuristic: check for Chinese characters
+    chinese_char_count = sum(1 for char in text if '\u4e00' <= char <= '\u9fff')
+
+    # If more than 10% of characters are Chinese, consider it Chinese
+    if len(text) > 0 and (chinese_char_count / len(text)) > 0.1:
+        return 'zh'
+    return 'en'
+
+
+def read_subtitle_file(subtitle_path: Path) -> tuple:
     """
     Read subtitle file and extract plain text
 
@@ -162,7 +184,7 @@ def read_subtitle_file(subtitle_path: Path) -> str:
         subtitle_path: Path to subtitle file
 
     Returns:
-        Extracted text content
+        Tuple of (extracted_text, detected_language)
     """
     with open(subtitle_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
@@ -176,4 +198,7 @@ def read_subtitle_file(subtitle_path: Path) -> str:
             continue
         text_lines.append(line)
 
-    return ' '.join(text_lines)
+    text = ' '.join(text_lines)
+    language = detect_language_from_text(text)
+
+    return text, language

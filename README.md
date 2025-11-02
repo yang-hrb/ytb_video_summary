@@ -1,5 +1,7 @@
 # YouTube Video Transcription & Summarization Tool
 
+[中文文档 (Chinese README)](doc/README_zh.md)
+
 🎥 Automatically transcribe YouTube videos (including membership content) to text and generate AI-powered summaries
 
 ## ✨ Features
@@ -7,12 +9,12 @@
 - ✅ Support for YouTube public and membership videos
 - ✅ Automatic subtitle extraction or generation
 - ✅ AI-powered video content summarization (using OpenRouter free models)
+- ✅ **Language-aware AI summaries** - Automatically generates summaries in the same language as the content (Chinese→Chinese, English→English)
 - ✅ Save storage space (optional audio deletion)
 - ✅ Multiple summary styles (brief/detailed)
 - ✅ Timestamped subtitle files (SRT format)
 - ✅ YouTube playlist processing support
 - ✅ Local MP3 file processing support
-- ✅ Optional Notion integration for knowledge management
 
 ## 📋 System Requirements
 
@@ -79,7 +81,20 @@ cp .env.example .env
 
 # Full mode - choose summary style, keep-audio options, etc.
 ./run.sh
+
+# Process YouTube playlist and upload to GitHub
+./playlist-to-github.sh
+
+# Process local MP3 folder and upload to GitHub
+./local-mp3-to-github.sh
 ```
+
+**Features of GitHub Upload Scripts:**
+- 🎯 **Automated workflow**: Process content and upload in one command
+- 🎨 **Interactive prompts**: Guides you through all options
+- 📊 **Progress tracking**: Shows processing and upload status
+- ✅ **Smart confirmation**: Asks before uploading to GitHub
+- 🛡️ **Error handling**: Saves locally if GitHub upload fails
 
 **Method 2: Manual Execution**
 
@@ -105,6 +120,11 @@ python src/main.py -video "URL" --keep-audio
 
 # Use cookies (for membership videos)
 python src/main.py -video "URL" --cookies cookies.txt
+
+# Upload to GitHub (automatically during processing)
+python src/main.py -video "URL" --upload
+python src/main.py -list "URL" --upload
+python src/main.py -local /path/to/mp3 --upload
 ```
 
 ## 📖 Usage Guide
@@ -121,8 +141,9 @@ Input Arguments (mutually exclusive):
 
 Optional Arguments:
   --cookies FILE         Path to cookies.txt file (for membership videos)
-  --keep-audio          Keep downloaded audio files
+  --keep-audio          Keep downloaded audio files (YouTube only)
   --style {brief|detailed}  Summary style (default: detailed)
+  --upload              Upload report files to GitHub repository
 ```
 
 ### Processing Membership Videos
@@ -161,7 +182,134 @@ results = process_local_folder(
 print(f"Transcript file: {result['transcript_file']}")
 print(f"Summary file: {result['summary_file']}")
 print(f"Report file: {result['report_file']}")
-print(f"Notion URL: {result['notion_url']}")
+```
+
+### Automated Playlist & MP3 Processing with GitHub Upload
+
+Use the automated shell scripts for a streamlined workflow:
+
+**1. YouTube Playlist to GitHub (`playlist-to-github.sh`)**
+
+Process an entire YouTube playlist and automatically upload reports to GitHub:
+
+```bash
+# Interactive mode (prompts for all options)
+./playlist-to-github.sh
+
+# With playlist URL as argument
+./playlist-to-github.sh "https://youtube.com/playlist?list=xxxxx"
+```
+
+**Features:**
+- ✅ Prompts for playlist URL
+- ✅ Choose summary style (brief/detailed)
+- ✅ Optional cookies support for membership videos
+- ✅ Processes all videos in playlist
+- ✅ Asks for confirmation before GitHub upload
+- ✅ Shows detailed progress and results
+
+**Example workflow:**
+```
+1. Enter playlist URL
+2. Choose summary style (brief/detailed)
+3. Use cookies? (y/N)
+4. Processing playlist... (shows progress for each video)
+5. Upload reports to GitHub? (Y/n)
+6. Done! Reports uploaded to GitHub
+```
+
+**2. Local MP3 to GitHub (`local-mp3-to-github.sh`)**
+
+Process local MP3 files and automatically upload reports to GitHub:
+
+```bash
+# Interactive mode (prompts for folder path)
+./local-mp3-to-github.sh
+
+# With folder path as argument
+./local-mp3-to-github.sh /path/to/mp3/folder
+```
+
+**Features:**
+- ✅ Prompts for MP3 folder path
+- ✅ Validates folder and counts MP3 files
+- ✅ Choose summary style (brief/detailed)
+- ✅ Processes all MP3 files with transcription
+- ✅ Asks for confirmation before GitHub upload
+- ✅ Shows detailed progress and results
+
+**Example workflow:**
+```
+1. Enter MP3 folder path
+2. Found 10 MP3 file(s) in folder ✓
+3. Choose summary style (brief/detailed)
+4. Processing MP3 files... (shows progress)
+5. Upload reports to GitHub? (Y/n)
+6. Done! Reports uploaded to GitHub
+```
+
+**Prerequisites for GitHub Upload:**
+- GitHub must be configured in `.env` file:
+  ```bash
+  GITHUB_TOKEN=your_personal_access_token
+  GITHUB_REPO=username/repository_name
+  GITHUB_BRANCH=main
+  ```
+- If not configured, reports will be saved locally only
+
+### GitHub Batch Upload
+
+Upload all markdown files from a folder to your GitHub repository using the dedicated upload script:
+
+**Setup:**
+```bash
+# Configure GitHub in .env file
+GITHUB_TOKEN=your_personal_access_token
+GITHUB_REPO=username/repository_name
+GITHUB_BRANCH=main
+```
+
+**Usage:**
+```bash
+# Upload all .md files from output/reports to GitHub
+python src/upload_to_github.py output/reports
+
+# Upload to a different remote folder
+python src/upload_to_github.py output/summaries --remote-folder summaries
+
+# Preview what would be uploaded (dry run)
+python src/upload_to_github.py output/reports --dry-run
+```
+
+**Features:**
+- 📤 Uploads all .md files from specified folder
+- 🔄 Automatically creates or updates files in GitHub
+- 📊 Shows upload progress and summary
+- ✅ Interactive confirmation before upload
+- 🛡️ Dry-run mode to preview changes
+
+**Example Output:**
+```
+Found 15 markdown files:
+  - 20251101_1430_TechChannel_intro-to-ai.md
+  - 20251101_1445_DevTips_python-best-practices.md
+  ...
+
+Ready to upload 15 files to GitHub
+Repository: username/video-summaries
+Branch: main
+Remote folder: reports
+
+Continue? [y/N]: y
+
+[1/15] Uploading: 20251101_1430_TechChannel_intro-to-ai.md
+✓ Uploaded successfully
+  URL: https://github.com/username/video-summaries/blob/main/reports/...
+
+Upload Summary:
+Total files: 15
+Successful: 15
+✓ All files uploaded successfully!
 ```
 
 ## 📁 Output Files
@@ -236,10 +384,6 @@ AUDIO_QUALITY=64
 
 # Keep audio files
 KEEP_AUDIO=false
-
-# Notion Integration (optional)
-NOTION_API_KEY=your_notion_integration_token
-NOTION_DATABASE_ID=your_notion_database_id
 ```
 
 **Model Selection Guide:**
@@ -300,11 +444,13 @@ Ensure FFmpeg is installed and added to system PATH
 - **OpenAI Whisper**: Speech-to-text transcription
 - **OpenRouter**: AI text summarization
 - **FFmpeg**: Audio processing
-- **Notion API**: Knowledge management integration (optional)
 
 ## 🔮 Future Plans
 
-- [ ] Support for batch processing multiple videos
+- [x] Support for batch processing multiple videos (YouTube playlists)
+- [x] Local audio file processing support
+- [x] Language-aware AI summaries
+- [ ] GitHub repository integration for automated backup
 - [ ] Web UI interface
 - [ ] Support for more video platforms (Bilibili, Vimeo)
 - [ ] Multi-language translation features
