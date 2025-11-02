@@ -222,3 +222,4 @@ output/
 *.wav
 *.opus
 youtube_summarizer.log
+.DS_Store
