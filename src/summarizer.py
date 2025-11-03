@@ -13,16 +13,16 @@ logger = logging.getLogger(__name__)
 class Summarizer:
     """Use OpenRouter API for text summarization"""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-r1"):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         """
         Initialize summarizer
 
         Args:
             api_key: OpenRouter API Key
-            model: Model name to use
+            model: Model name to use (defaults to OPENROUTER_MODEL from config)
         """
         self.api_key = api_key or config.OPENROUTER_API_KEY
-        self.model = model
+        self.model = model or config.OPENROUTER_MODEL
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
 
         if not self.api_key:
