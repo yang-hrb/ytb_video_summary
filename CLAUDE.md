@@ -144,7 +144,8 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `GitHubHandler` class handles GitHub API communication for file uploads
 - `upload_file()` - Uploads a file to GitHub repository (supports both text and binary files)
 - `upload_to_github()` - Convenience function for uploading report files
-- `upload_logs_to_github()` - Uploads all log files and run tracking database to GitHub
+- `upload_logs_to_github()` - Uploads current session's log file, failure logs, and run tracking database to GitHub
+- Only uploads logs from the current session (not old logs)
 - Automatically detects binary files (.db, .sqlite, etc.) and handles them appropriately
 - Updates existing files or creates new ones with commit messages
 
@@ -356,8 +357,10 @@ print(f"Failed: {stats['by_status'].get('failed', 0)}")
 
 **Automatic GitHub Upload:**
 When GitHub integration is configured and the `--upload` flag is used:
-- All log files (`*.log`, `failures_*.txt`) are automatically uploaded to `logs/` folder in the repository
-- The run tracking database (`run_track.db`) is automatically uploaded
+- Only the current session's log file is uploaded (not old logs)
+- Failure logs created during the current session are uploaded (`failures_*.txt`)
+- The run tracking database (`run_track.db`) is uploaded with complete history
+- Database tracks all runs across all sessions (append-only)
 - Uploads happen after all processing is complete
 - Allows centralized storage and tracking across multiple runs
 - Existing files are updated with new commits
@@ -365,7 +368,10 @@ When GitHub integration is configured and the `--upload` flag is used:
 Example command with GitHub upload:
 ```bash
 python src/main.py -video "URL" --upload
-# After processing completes, logs and database are uploaded to GitHub
+# After processing completes:
+# - Current session's log file uploaded
+# - Any failure logs from this session uploaded
+# - Complete database with all historical runs uploaded
 ```
 
 ### Summarization API Configuration

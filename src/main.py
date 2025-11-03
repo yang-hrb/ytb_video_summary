@@ -17,7 +17,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from config import config
-from src.logger import setup_logging, get_logger
+from src.logger import setup_logging, get_logger, get_current_log_file
 from src.youtube_handler import process_youtube_video, get_playlist_videos
 from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcriber
 from src.summarizer import summarize_transcript
@@ -667,7 +667,9 @@ Examples:
             logger.info("="*60)
             log_step("Final", "Uploading logs and database to GitHub...")
             try:
-                log_results = upload_logs_to_github()
+                # Get current log file path
+                current_log = get_current_log_file()
+                log_results = upload_logs_to_github(current_log)
                 if log_results['db_url']:
                     logger.info(f"  Database: {log_results['db_url']}")
                 if log_results['log_files']:
