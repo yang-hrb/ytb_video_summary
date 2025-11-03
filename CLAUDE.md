@@ -140,6 +140,14 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `save_to_notion()` - Convenience function for saving to Notion
 - Gracefully handles missing Notion configuration (falls back to local-only saving)
 
+**`src/github_handler.py`**
+- `GitHubHandler` class handles GitHub API communication for file uploads
+- `upload_file()` - Uploads a file to GitHub repository (supports both text and binary files)
+- `upload_to_github()` - Convenience function for uploading report files
+- `upload_logs_to_github()` - Uploads all log files and run tracking database to GitHub
+- Automatically detects binary files (.db, .sqlite, etc.) and handles them appropriately
+- Updates existing files or creates new ones with commit messages
+
 **`src/run_tracker.py`**
 - `RunTracker` class manages SQLite database for tracking processing runs
 - `start_run()` - Records the start of a processing run (youtube/local type)
@@ -344,6 +352,20 @@ failed = tracker.get_failed_runs(limit=10)
 stats = tracker.get_stats()
 print(f"Total runs: {stats['total']}")
 print(f"Failed: {stats['by_status'].get('failed', 0)}")
+```
+
+**Automatic GitHub Upload:**
+When GitHub integration is configured and the `--upload` flag is used:
+- All log files (`*.log`, `failures_*.txt`) are automatically uploaded to `logs/` folder in the repository
+- The run tracking database (`run_track.db`) is automatically uploaded
+- Uploads happen after all processing is complete
+- Allows centralized storage and tracking across multiple runs
+- Existing files are updated with new commits
+
+Example command with GitHub upload:
+```bash
+python src/main.py -video "URL" --upload
+# After processing completes, logs and database are uploaded to GitHub
 ```
 
 ### Summarization API Configuration

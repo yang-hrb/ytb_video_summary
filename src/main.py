@@ -22,7 +22,7 @@ from src.youtube_handler import process_youtube_video, get_playlist_videos
 from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcriber
 from src.summarizer import summarize_transcript
 from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename
-from src.github_handler import upload_to_github
+from src.github_handler import upload_to_github, upload_logs_to_github
 from src.run_tracker import get_tracker, log_failure
 
 # Initialize colorama
@@ -660,6 +660,21 @@ Examples:
             logger.info("  python src/main.py <YouTube URL>")
             logger.info("Use --help for detailed help")
             sys.exit(1)
+
+        # Upload logs and database to GitHub if configured
+        if args.upload and (config.GITHUB_TOKEN and config.GITHUB_REPO):
+            logger.info("")
+            logger.info("="*60)
+            log_step("Final", "Uploading logs and database to GitHub...")
+            try:
+                log_results = upload_logs_to_github()
+                if log_results['db_url']:
+                    logger.info(f"  Database: {log_results['db_url']}")
+                if log_results['log_files']:
+                    logger.info(f"  Uploaded {len(log_results['log_files'])} log file(s)")
+                logger.info("Logs uploaded successfully!")
+            except Exception as e:
+                logger.warning(f"Failed to upload logs: {e}")
 
         sys.exit(0)
 
