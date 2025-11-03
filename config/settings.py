@@ -24,6 +24,12 @@ class Config:
     AUDIO_FORMAT = os.getenv('AUDIO_FORMAT', 'mp3')
     KEEP_AUDIO = os.getenv('KEEP_AUDIO', 'false').lower() == 'true'
 
+    # Summary Language (for AI-generated summaries and reports)
+    # Options: 'en' for English, 'zh' for Chinese
+    # Default: 'zh' (Chinese)
+    # Note: Whisper transcription language is controlled by WHISPER_LANGUAGE
+    SUMMARY_LANGUAGE = os.getenv('SUMMARY_LANGUAGE', 'zh')
+
     # Browser
     BROWSER_TYPE = os.getenv('BROWSER_TYPE', 'chrome')
     USE_COOKIES_FILE = os.getenv('USE_COOKIES_FILE', 'false').lower() == 'true'
@@ -32,6 +38,7 @@ class Config:
     BASE_DIR = Path(__file__).parent.parent
     OUTPUT_DIR = BASE_DIR / os.getenv('OUTPUT_DIR', 'output')
     TEMP_DIR = BASE_DIR / os.getenv('TEMP_DIR', 'temp')
+    LOG_DIR = BASE_DIR / 'logs'
     TRANSCRIPT_DIR = OUTPUT_DIR / 'transcripts'
     SUMMARY_DIR = OUTPUT_DIR / 'summaries'
     REPORT_DIR = OUTPUT_DIR / 'reports'
@@ -42,7 +49,7 @@ class Config:
 
     def _create_directories(self):
         """Create all necessary directories"""
-        for dir_path in [self.OUTPUT_DIR, self.TEMP_DIR, self.TRANSCRIPT_DIR, self.SUMMARY_DIR, self.REPORT_DIR]:
+        for dir_path in [self.OUTPUT_DIR, self.TEMP_DIR, self.LOG_DIR, self.TRANSCRIPT_DIR, self.SUMMARY_DIR, self.REPORT_DIR]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
     def validate(self):
