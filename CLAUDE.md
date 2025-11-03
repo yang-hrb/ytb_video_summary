@@ -140,6 +140,16 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `save_to_notion()` - Convenience function for saving to Notion
 - Gracefully handles missing Notion configuration (falls back to local-only saving)
 
+**`src/run_tracker.py`**
+- `RunTracker` class manages SQLite database for tracking processing runs
+- `start_run()` - Records the start of a processing run (youtube/local type)
+- `update_status()` - Updates run status (start → working → done/failed)
+- `get_run_info()` - Retrieves information about a specific run
+- `get_failed_runs()` - Lists all failed processing runs
+- `get_stats()` - Provides statistics about all runs (by status, by type)
+- `log_failure()` - Creates timestamped failure log files in logs/ directory
+- Automatic database initialization with indexed columns for performance
+
 ### Directory Structure
 
 ```
@@ -148,6 +158,10 @@ output/
 ├── summaries/      # [video_id]_summary.md - Summaries indexed by video ID
 └── reports/        # [timestamp]_[uploader]_[content-title].md - Enhanced timestamped reports
 temp/               # Temporary audio files (auto-cleaned unless --keep-audio)
+logs/
+├── run_track.db    # SQLite database tracking all processing runs
+├── failures_[timestamp].txt  # Timestamped failure logs
+└── youtube_summarizer_[timestamp].log  # Application logs
 ```
 
 **Report Filename Format:**
@@ -284,6 +298,53 @@ Downloaded audio files are automatically deleted after transcription unless:
 
 ### Error Handling
 The application uses Python logging to both console and `youtube_summarizer.log`. When debugging issues, check this log file for detailed error traces.
+
+### Run Tracking and Failure Logging
+
+The application automatically tracks all processing runs in a SQLite database (`logs/run_track.db`) and creates timestamped failure logs for any errors.
+
+**Run Tracking Database:**
+- Tracks every video/MP3 processing attempt
+- Records type (youtube/local), URL/path, identifier, and status
+- Status progression: start → working → done/failed
+- Includes timestamps for started_at and updated_at
+- Stores error messages for failed runs
+- Indexed for fast lookups by identifier and status
+
+**Database Schema:**
+```sql
+CREATE TABLE runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,              -- 'youtube' or 'local'
+    url_or_path TEXT NOT NULL,       -- YouTube URL or file path
+    identifier TEXT NOT NULL,        -- Video ID or MP3 filename
+    status TEXT NOT NULL,            -- 'start', 'working', 'done', 'failed'
+    started_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    error_message TEXT               -- Optional error details
+)
+```
+
+**Failure Logging:**
+- Failed runs are logged to timestamped files: `logs/failures_YYYYMMDD_HHMMSS.txt`
+- Each failure entry includes: timestamp, type, identifier, URL/path, and error message
+- Allows easy identification of problematic videos/files for retry or investigation
+
+**Usage Example:**
+```python
+from src.run_tracker import get_tracker, log_failure
+
+# Get tracker instance
+tracker = get_tracker()
+
+# Get failed runs
+failed = tracker.get_failed_runs(limit=10)
+
+# Get statistics
+stats = tracker.get_stats()
+print(f"Total runs: {stats['total']}")
+print(f"Failed: {stats['by_status'].get('failed', 0)}")
+```
 
 ### Summarization API Configuration
 

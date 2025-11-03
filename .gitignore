@@ -3,7 +3,7 @@
 .idea/
 .claude/
 temp/
-logs/
+logs/  # includes run_track.db and failure logs
 
 
 # Byte-compiled / optimized / DLL files

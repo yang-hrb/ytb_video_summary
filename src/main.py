@@ -23,6 +23,7 @@ from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcri
 from src.summarizer import summarize_transcript
 from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename
 from src.github_handler import upload_to_github
+from src.run_tracker import get_tracker, log_failure
 
 # Initialize colorama
 init(autoreset=True)
@@ -78,6 +79,11 @@ def process_video(
     Returns:
         Dictionary containing processing results
     """
+    # Initialize run tracking
+    tracker = get_tracker()
+    run_id = None
+    video_id = None
+
     try:
         # Step 1: Download video info and subtitles/audio
         log_step("1/4", "Fetching video information...")
@@ -85,6 +91,10 @@ def process_video(
 
         video_info = result['info']
         video_id = result['video_id']
+
+        # Start tracking this run
+        run_id = tracker.start_run('youtube', url, video_id)
+        tracker.update_status(run_id, 'working')
 
         logger.info(f"  Title: {video_info['title']}")
         logger.info(f"  Duration: {video_info['duration']}s")
@@ -155,6 +165,10 @@ def process_video(
 
         log_success("Video processing complete!")
 
+        # Mark run as done
+        if run_id:
+            tracker.update_status(run_id, 'done')
+
         return {
             'video_id': video_id,
             'video_info': video_info,
@@ -168,6 +182,13 @@ def process_video(
     except Exception as e:
         log_error(f"Processing failed: {e}")
         logger.exception("Error processing video")
+
+        # Mark run as failed and log to failure file
+        if run_id:
+            tracker.update_status(run_id, 'failed', str(e))
+        if video_id:
+            log_failure('youtube', video_id, url, str(e))
+
         raise
 
 
@@ -187,8 +208,17 @@ def process_local_mp3(
     Returns:
         Dictionary containing processing results
     """
+    # Initialize run tracking
+    tracker = get_tracker()
+    run_id = None
+    file_name = None
+
     try:
         file_name = mp3_path.stem  # Filename without extension
+
+        # Start tracking this run
+        run_id = tracker.start_run('local', str(mp3_path), mp3_path.name)
+        tracker.update_status(run_id, 'working')
 
         logger.info(f"  File: {mp3_path.name}")
         logger.info(f"  Size: {get_file_size_mb(mp3_path):.2f} MB")
@@ -257,6 +287,10 @@ def process_local_mp3(
 
         log_success("Audio processing complete!")
 
+        # Mark run as done
+        if run_id:
+            tracker.update_status(run_id, 'done')
+
         return {
             'file_name': file_name,
             'file_path': mp3_path,
@@ -270,6 +304,13 @@ def process_local_mp3(
     except Exception as e:
         log_error(f"Processing failed: {e}")
         logger.exception("Error processing local MP3")
+
+        # Mark run as failed and log to failure file
+        if run_id:
+            tracker.update_status(run_id, 'failed', str(e))
+        if file_name:
+            log_failure('local', mp3_path.name, str(mp3_path), str(e))
+
         raise
 
 
