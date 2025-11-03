@@ -3,6 +3,7 @@
 .idea/
 .claude/
 temp/
+logs/
 
 
 # Byte-compiled / optimized / DLL files

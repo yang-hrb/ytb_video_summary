@@ -14,7 +14,6 @@ Usage:
 import sys
 import argparse
 from pathlib import Path
-import logging
 from typing import List
 
 from colorama import init, Fore, Style
@@ -26,16 +25,13 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from config import config
 from src.github_handler import GitHubHandler
+from src.logger import setup_logging, get_logger
 
 # Initialize colorama
 init(autoreset=True)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Initialize logging
+logger = setup_logging()
 
 
 def print_header():
@@ -46,27 +42,8 @@ def print_header():
 ║   Upload .md files to GitHub repository                   ║
 ╚═══════════════════════════════════════════════════════════╝{Style.RESET_ALL}
 """
+    # Print banner to console (not logged to file)
     print(header)
-
-
-def print_success(message: str):
-    """Print success message"""
-    print(f"{Fore.GREEN}[SUCCESS]{Style.RESET_ALL} {message}")
-
-
-def print_error(message: str):
-    """Print error message"""
-    print(f"{Fore.RED}[ERROR]{Style.RESET_ALL} {message}")
-
-
-def print_info(message: str):
-    """Print info message"""
-    print(f"{Fore.CYAN}[INFO]{Style.RESET_ALL} {message}")
-
-
-def print_warning(message: str):
-    """Print warning message"""
-    print(f"{Fore.YELLOW}[WARNING]{Style.RESET_ALL} {message}")
 
 
 def find_markdown_files(folder_path: Path) -> List[Path]:
@@ -110,14 +87,13 @@ def upload_files(files: List[Path], remote_folder: str = "reports", skip_existin
     # Initialize GitHub handler
     handler = GitHubHandler()
 
-    print_info(f"GitHub Repository: {config.GITHUB_REPO}")
-    print_info(f"Target Branch: {config.GITHUB_BRANCH}")
-    print_info(f"Remote Folder: {remote_folder}")
+    logger.info(f"GitHub Repository: {config.GITHUB_REPO}")
+    logger.info(f"Target Branch: {config.GITHUB_BRANCH}")
+    logger.info(f"Remote Folder: {remote_folder}")
     if skip_existing:
-        print_info(f"Mode: Skip existing files")
+        logger.info("Mode: Skip existing files")
     else:
-        print_info(f"Mode: Update existing files")
-    print()
+        logger.info("Mode: Update existing files")
 
     # Upload files
     results = {
@@ -129,7 +105,7 @@ def upload_files(files: List[Path], remote_folder: str = "reports", skip_existin
     }
 
     for idx, file_path in enumerate(files, 1):
-        print(f"\n{Fore.CYAN}[{idx}/{len(files)}]{Style.RESET_ALL} Uploading: {file_path.name}")
+        logger.info(f"[{idx}/{len(files)}] Uploading: {file_path.name}")
 
         try:
             remote_path = f"{remote_folder}/{file_path.name}"
@@ -144,16 +120,16 @@ def upload_files(files: List[Path], remote_folder: str = "reports", skip_existin
 
             if url is None:
                 # File was skipped (already exists)
-                print_warning(f"Skipped (already exists)")
+                logger.warning("Skipped (already exists)")
                 results['skipped'] += 1
             else:
                 # File was uploaded successfully
-                print_success(f"Uploaded successfully")
-                print(f"  URL: {Fore.BLUE}{url}{Style.RESET_ALL}")
+                logger.info("Uploaded successfully")
+                logger.info(f"  URL: {url}")
                 results['success'] += 1
 
         except Exception as e:
-            print_error(f"Upload failed: {e}")
+            logger.error(f"Upload failed: {e}")
             results['failed'] += 1
             results['errors'].append({
                 'file': file_path.name,
@@ -166,25 +142,25 @@ def upload_files(files: List[Path], remote_folder: str = "reports", skip_existin
 
 def print_summary(results: dict):
     """Print upload summary"""
-    print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}Upload Summary{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
+    logger.info("="*60)
+    logger.info("Upload Summary")
+    logger.info("="*60)
 
-    print(f"Total files: {results['total']}")
-    print(f"{Fore.GREEN}Successful: {results['success']}{Style.RESET_ALL}")
+    logger.info(f"Total files: {results['total']}")
+    logger.info(f"Successful: {results['success']}")
 
     if results.get('skipped', 0) > 0:
-        print(f"{Fore.YELLOW}Skipped: {results['skipped']}{Style.RESET_ALL}")
+        logger.info(f"Skipped: {results['skipped']}")
 
     if results['failed'] > 0:
-        print(f"{Fore.RED}Failed: {results['failed']}{Style.RESET_ALL}\n")
-        print(f"{Fore.YELLOW}Failed files:{Style.RESET_ALL}")
+        logger.error(f"Failed: {results['failed']}")
+        logger.warning("Failed files:")
         for error in results['errors']:
-            print(f"  - {error['file']}: {error['error']}")
+            logger.warning(f"  - {error['file']}: {error['error']}")
     elif results.get('skipped', 0) == 0:
-        print_success("All files uploaded successfully!")
+        logger.info("SUCCESS: All files uploaded successfully!")
     else:
-        print_success("Upload complete!")
+        logger.info("SUCCESS: Upload complete!")
 
 
 def main():
@@ -250,41 +226,41 @@ Setup:
         # Convert folder path
         folder_path = Path(args.folder)
 
-        print_info(f"Local folder: {folder_path.absolute()}")
+        logger.info(f"Local folder: {folder_path.absolute()}")
 
         # Find markdown files
-        print_info("Scanning for .md files...\n")
+        logger.info("Scanning for .md files...")
         md_files = find_markdown_files(folder_path)
 
         if not md_files:
-            print_warning(f"No .md files found in {folder_path}")
+            logger.warning(f"No .md files found in {folder_path}")
             sys.exit(0)
 
-        print(f"Found {Fore.GREEN}{len(md_files)}{Style.RESET_ALL} markdown files:\n")
+        logger.info(f"Found {len(md_files)} markdown files:")
         for file_path in md_files:
-            print(f"  - {file_path.name}")
+            logger.info(f"  - {file_path.name}")
 
         # Dry run mode
         if args.dry_run:
-            print_info("\nDry run mode - no files will be uploaded")
-            print_info(f"Files would be uploaded to: {config.GITHUB_REPO}/{args.remote_folder}")
+            logger.info("Dry run mode - no files will be uploaded")
+            logger.info(f"Files would be uploaded to: {config.GITHUB_REPO}/{args.remote_folder}")
             sys.exit(0)
 
         # Confirm upload
-        print(f"\n{Fore.YELLOW}Ready to upload {len(md_files)} files to GitHub{Style.RESET_ALL}")
-        print(f"Repository: {Fore.CYAN}{config.GITHUB_REPO}{Style.RESET_ALL}")
-        print(f"Branch: {Fore.CYAN}{config.GITHUB_BRANCH}{Style.RESET_ALL}")
-        print(f"Remote folder: {Fore.CYAN}{args.remote_folder}{Style.RESET_ALL}")
+        logger.info(f"Ready to upload {len(md_files)} files to GitHub")
+        logger.info(f"Repository: {config.GITHUB_REPO}")
+        logger.info(f"Branch: {config.GITHUB_BRANCH}")
+        logger.info(f"Remote folder: {args.remote_folder}")
         if args.skip_existing:
-            print(f"Mode: {Fore.YELLOW}Skip existing files{Style.RESET_ALL}")
+            logger.info("Mode: Skip existing files")
 
         response = input(f"\n{Fore.YELLOW}Continue? [y/N]:{Style.RESET_ALL} ")
         if response.lower() not in ['y', 'yes']:
-            print_info("Upload cancelled by user")
+            logger.info("Upload cancelled by user")
             sys.exit(0)
 
         # Upload files
-        print(f"\n{Fore.CYAN}Starting upload...{Style.RESET_ALL}")
+        logger.info("Starting upload...")
         results = upload_files(md_files, args.remote_folder, skip_existing=args.skip_existing)
 
         # Print summary
@@ -294,23 +270,23 @@ Setup:
         sys.exit(0 if results['failed'] == 0 else 1)
 
     except FileNotFoundError as e:
-        print_error(str(e))
+        logger.error(str(e))
         sys.exit(1)
     except NotADirectoryError as e:
-        print_error(str(e))
+        logger.error(str(e))
         sys.exit(1)
     except ValueError as e:
-        print_error(str(e))
-        print_info("\nPlease configure GitHub settings in .env file:")
-        print("  GITHUB_TOKEN=your_personal_access_token")
-        print("  GITHUB_REPO=owner/repository")
-        print("  GITHUB_BRANCH=main")
+        logger.error(str(e))
+        logger.info("Please configure GitHub settings in .env file:")
+        logger.info("  GITHUB_TOKEN=your_personal_access_token")
+        logger.info("  GITHUB_REPO=owner/repository")
+        logger.info("  GITHUB_BRANCH=main")
         sys.exit(1)
     except KeyboardInterrupt:
-        print_error("\nUpload cancelled by user")
+        logger.error("Upload cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print_error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}")
         logger.exception("Unexpected error occurred")
         sys.exit(1)
 
