@@ -8,7 +8,7 @@ Audio/Video Transcription & Summarization Tool - A Python CLI application that:
 - Downloads YouTube videos (including membership content) and playlists
 - Processes local MP3 files from folders
 - Transcribes audio to text using OpenAI Whisper
-- Generates AI-powered summaries using OpenRouter API
+- Generates AI-powered summaries using OpenRouter or Perplexity API
 - Optionally syncs summaries to Notion for knowledge management
 
 ## Essential Development Commands
@@ -80,7 +80,7 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 
 1. **Video Acquisition** (`youtube_handler.py`) - Downloads video metadata and attempts subtitle extraction. If subtitles unavailable, downloads audio for transcription.
 2. **Transcription** (`transcriber.py`) - Either reads existing subtitles or uses Whisper to transcribe downloaded audio to text with timestamps.
-3. **AI Summarization** (`summarizer.py`) - Sends transcript to OpenRouter API for intelligent summarization in specified style (brief/detailed).
+3. **AI Summarization** (`summarizer.py`) - Sends transcript to configured API (OpenRouter or Perplexity) for intelligent summarization in specified style (brief/detailed).
 4. **Output Generation** - Creates three output files: SRT transcript, summary by video ID, and timestamped report by title.
 
 ### Module Responsibilities
@@ -113,9 +113,11 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `read_subtitle_file()` - Parses existing SRT files to extract plain text
 
 **`src/summarizer.py`**
-- `Summarizer` class handles OpenRouter API communication
-- Creates style-specific prompts (brief vs detailed) in Chinese
-- `summarize()` - Sends transcript to deepseek/deepseek-r1 model
+- `Summarizer` class handles API communication (OpenRouter or Perplexity)
+- Creates style-specific prompts (brief vs detailed) in multiple languages
+- `summarize()` - Sends transcript to configured AI model (OpenRouter's deepseek/deepseek-r1 or Perplexity's sonar-pro)
+- `_summarize_openrouter()` - Internal method for OpenRouter API calls
+- `_summarize_perplexity()` - Internal method for Perplexity API calls (uses OpenAI client library)
 - `save_summary()` - Generates two outputs: video_id-based summary and timestamped report
 
 **`config/settings.py`**
@@ -138,6 +140,24 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `save_to_notion()` - Convenience function for saving to Notion
 - Gracefully handles missing Notion configuration (falls back to local-only saving)
 
+**`src/github_handler.py`**
+- `GitHubHandler` class handles GitHub API communication for file uploads
+- `upload_file()` - Uploads a file to GitHub repository (supports both text and binary files)
+- `upload_to_github()` - Convenience function for uploading report files
+- `upload_logs_to_github()` - Uploads all log files and run tracking database to GitHub
+- Automatically detects binary files (.db, .sqlite, etc.) and handles them appropriately
+- Updates existing files or creates new ones with commit messages
+
+**`src/run_tracker.py`**
+- `RunTracker` class manages SQLite database for tracking processing runs
+- `start_run()` - Records the start of a processing run (youtube/local type)
+- `update_status()` - Updates run status (start → working → done/failed)
+- `get_run_info()` - Retrieves information about a specific run
+- `get_failed_runs()` - Lists all failed processing runs
+- `get_stats()` - Provides statistics about all runs (by status, by type)
+- `log_failure()` - Creates timestamped failure log files in logs/ directory
+- Automatic database initialization with indexed columns for performance
+
 ### Directory Structure
 
 ```
@@ -146,6 +166,10 @@ output/
 ├── summaries/      # [video_id]_summary.md - Summaries indexed by video ID
 └── reports/        # [timestamp]_[uploader]_[content-title].md - Enhanced timestamped reports
 temp/               # Temporary audio files (auto-cleaned unless --keep-audio)
+logs/
+├── run_track.db    # SQLite database tracking all processing runs
+├── failures_[timestamp].txt  # Timestamped failure logs
+└── youtube_summarizer_[timestamp].log  # Application logs
 ```
 
 **Report Filename Format:**
@@ -159,14 +183,19 @@ Reports are saved with an enhanced filename format:
 
 All settings are managed through `.env` file and accessed via `config.config` singleton:
 
-**Required:**
-- **OPENROUTER_API_KEY** - Required for AI summarization
+**Required (Summarization API - choose one):**
+- **SUMMARY_API** - API provider to use ('OPENROUTER' or 'PERPLEXITY') - defaults to 'OPENROUTER'
+- **OPENROUTER_API_KEY** - Required if SUMMARY_API=OPENROUTER (default)
+  - **OPENROUTER_MODEL** - Model name to use - defaults to 'deepseek/deepseek-r1'
+- **PERPLEXITY_API_KEY** - Required if SUMMARY_API=PERPLEXITY
+  - **PERPLEXITY_MODEL** - Model name to use - defaults to 'sonar-pro'
 
 **Optional:**
 - **NOTION_API_KEY** - Notion Integration Token (for automatic Notion sync)
 - **NOTION_DATABASE_ID** - Notion Database ID (where summaries will be saved)
 - **WHISPER_MODEL** - Model size (tiny/base/small/medium/large) - defaults to 'base'
 - **WHISPER_LANGUAGE** - Language code (zh/en/auto) - defaults to 'zh'
+- **SUMMARY_LANGUAGE** - Summary output language (zh/en) - defaults to 'zh'
 - **AUDIO_QUALITY** - Download quality in kbps (32/64/96/128)
 - **KEEP_AUDIO** - Whether to preserve downloaded audio files
 
@@ -241,7 +270,7 @@ The application can process local MP3 files from a folder:
 
 **Local MP3 Processing Pipeline (3 steps):**
 1. **Transcription** - Convert MP3 to text using Whisper
-2. **AI Summarization** - Generate summary with OpenRouter API
+2. **AI Summarization** - Generate summary with configured API (OpenRouter or Perplexity)
 3. **Output** - Save transcript (SRT), summary, report, and optionally to Notion
 
 **Metadata for Local Files:**
@@ -278,16 +307,101 @@ Downloaded audio files are automatically deleted after transcription unless:
 ### Error Handling
 The application uses Python logging to both console and `youtube_summarizer.log`. When debugging issues, check this log file for detailed error traces.
 
-### OpenRouter API Configuration
-The summarizer requires specific HTTP headers for OpenRouter API:
+### Run Tracking and Failure Logging
+
+The application automatically tracks all processing runs in a SQLite database (`logs/run_track.db`) and creates timestamped failure logs for any errors.
+
+**Run Tracking Database:**
+- Tracks every video/MP3 processing attempt
+- Records type (youtube/local), URL/path, identifier, and status
+- Status progression: start → working → done/failed
+- Includes timestamps for started_at and updated_at
+- Stores error messages for failed runs
+- Indexed for fast lookups by identifier and status
+
+**Database Schema:**
+```sql
+CREATE TABLE runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,              -- 'youtube' or 'local'
+    url_or_path TEXT NOT NULL,       -- YouTube URL or file path
+    identifier TEXT NOT NULL,        -- Video ID or MP3 filename
+    status TEXT NOT NULL,            -- 'start', 'working', 'done', 'failed'
+    started_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    error_message TEXT               -- Optional error details
+)
+```
+
+**Failure Logging:**
+- Failed runs are logged to timestamped files: `logs/failures_YYYYMMDD_HHMMSS.txt`
+- Each failure entry includes: timestamp, type, identifier, URL/path, and error message
+- Allows easy identification of problematic videos/files for retry or investigation
+
+**Usage Example:**
+```python
+from src.run_tracker import get_tracker, log_failure
+
+# Get tracker instance
+tracker = get_tracker()
+
+# Get failed runs
+failed = tracker.get_failed_runs(limit=10)
+
+# Get statistics
+stats = tracker.get_stats()
+print(f"Total runs: {stats['total']}")
+print(f"Failed: {stats['by_status'].get('failed', 0)}")
+```
+
+**Automatic GitHub Upload:**
+When GitHub integration is configured and the `--upload` flag is used:
+- All log files (`*.log`, `failures_*.txt`) are automatically uploaded to `logs/` folder in the repository
+- The run tracking database (`run_track.db`) is automatically uploaded
+- Uploads happen after all processing is complete
+- Allows centralized storage and tracking across multiple runs
+- Existing files are updated with new commits
+
+Example command with GitHub upload:
+```bash
+python src/main.py -video "URL" --upload
+# After processing completes, logs and database are uploaded to GitHub
+```
+
+### Summarization API Configuration
+
+The application supports two AI summarization providers:
+
+**OpenRouter API:**
+The OpenRouter implementation requires specific HTTP headers:
 - `HTTP-Referer` - Required by OpenRouter for request tracking
 - `X-Title` - Optional but recommended for better analytics
 - `Authorization` - Bearer token with your API key
 
-If you encounter 401 Unauthorized errors, verify:
-1. OPENROUTER_API_KEY is set correctly in .env file
-2. API key format starts with "sk-or-v1-" or similar
-3. The required headers are present in the API request
+If you encounter 401 Unauthorized errors with OpenRouter, verify:
+1. SUMMARY_API is set to 'OPENROUTER' in .env file
+2. OPENROUTER_API_KEY is set correctly in .env file
+3. API key format starts with "sk-or-v1-" or similar
+4. The required headers are present in the API request
+
+**Perplexity API:**
+The Perplexity implementation uses the OpenAI client library with a custom base URL:
+- Base URL: `https://api.perplexity.ai`
+- Default model: `sonar-pro`
+- Uses standard OpenAI-compatible interface
+
+If you encounter errors with Perplexity, verify:
+1. SUMMARY_API is set to 'PERPLEXITY' in .env file
+2. PERPLEXITY_API_KEY is set correctly in .env file
+3. The `openai` package is installed (`pip install openai>=1.0.0`)
+
+**Switching Between APIs:**
+To switch between APIs, simply update the `SUMMARY_API` variable in your `.env` file:
+```
+SUMMARY_API=OPENROUTER  # Use OpenRouter
+# or
+SUMMARY_API=PERPLEXITY  # Use Perplexity
+```
 
 ## Notion Integration (Optional)
 
@@ -318,7 +432,9 @@ See [doc/NOTION_SETUP.md](doc/NOTION_SETUP.md) for detailed setup guide.
 - **FFmpeg** - Must be installed system-wide for audio processing (brew install ffmpeg on Mac)
 - **yt-dlp** - YouTube downloader (handles both public and membership content)
 - **OpenAI Whisper** - Local speech-to-text transcription
-- **OpenRouter API** - Cloud-based AI summarization using deepseek/deepseek-r1 model
+- **Summarization API** (choose one):
+  - **OpenRouter API** - Cloud-based AI summarization using deepseek/deepseek-r1 model (default)
+  - **Perplexity API** - Cloud-based AI summarization using sonar-pro model
 - **Notion API** (Optional) - Cloud-based knowledge management integration
 
 ## Testing Notes

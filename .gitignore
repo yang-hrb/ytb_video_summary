@@ -3,7 +3,8 @@
 .idea/
 .claude/
 temp/
-logs/
+logs/  # includes run_track.db and failure logs
+
 
 
 # Byte-compiled / optimized / DLL files
@@ -224,3 +225,4 @@ output/
 *.opus
 youtube_summarizer.log
 .DS_Store
+logs/run_track.db
