@@ -9,12 +9,40 @@
 - ✅ Support for YouTube public and membership videos
 - ✅ Automatic subtitle extraction or generation
 - ✅ AI-powered video content summarization (using OpenRouter free models)
-- ✅ **Language-aware AI summaries** - Automatically generates summaries in the same language as the content (Chinese→Chinese, English→English)
+- ✅ **Configurable summary language** - Choose between Chinese (default) or English output via `.env` file
+- ✅ **Language-aware transcription** - Whisper maintains original audio language
 - ✅ Save storage space (optional audio deletion)
 - ✅ Multiple summary styles (brief/detailed)
 - ✅ Timestamped subtitle files (SRT format)
 - ✅ YouTube playlist processing support
 - ✅ Local MP3 file processing support
+- ✅ **Centralized logging system** - All logs saved to timestamped files in `logs/` folder
+- ✅ **Individual file uploads** - Each processed file uploads to GitHub immediately to prevent batch failures
+
+## 📊 Data Workflow
+
+```
+Input Sources → Processing Pipeline → Output & Storage
+     ↓                  ↓                    ↓
+  YouTube          1. Download          Local Files
+  Playlist           Audio/Subs           (output/)
+     or          2. Transcription            ↓
+  Local MP3      3. AI Summary        GitHub Upload
+   Folder        4. Save & Upload      (optional)
+```
+
+**Processing Flow:**
+1. **Input**: YouTube URL, Playlist, or Local MP3 folder
+2. **Transcription**: Whisper converts audio to text (preserves original language)
+3. **Summarization**: OpenRouter AI generates summary (configurable output language)
+4. **Output**: SRT transcript + Markdown summary + Enhanced report
+5. **Upload**: Individual files uploaded to GitHub immediately after each success
+
+**Key Benefits:**
+- 🔄 **Individual file processing**: Each file uploads independently
+- 🛡️ **Fault tolerance**: One file failure doesn't block others
+- 📝 **Comprehensive logging**: All operations logged to timestamped files
+- 🌐 **Language flexibility**: Transcription preserves original; summary language configurable
 
 ## 📋 System Requirements
 
@@ -317,11 +345,14 @@ Successful: 15
 ```
 output/
 ├── transcripts/
-│   └── [video_id]_transcript.srt      # Subtitle file
+│   └── [video_id]_transcript.srt      # Subtitle file (original language)
 ├── summaries/
 │   └── [video_id]_summary.md          # Summary file (by video ID)
 └── reports/
     └── [timestamp]_[uploader]_[title].md  # Report file (timestamped with uploader and title)
+
+logs/
+└── youtube_summarizer_[timestamp].log  # Detailed log file with timestamp
 ```
 
 ### Report File Format
@@ -373,17 +404,51 @@ File contains:
 Edit `.env` file for custom configuration:
 
 ```bash
+# === AI Model Configuration ===
+# OpenRouter API key (required for summarization)
+OPENROUTER_API_KEY=your_api_key_here
+
+# OpenRouter model name
+OPENROUTER_MODEL=deepseek/deepseek-r1
+
+# === Whisper Configuration ===
 # Whisper model size (tiny/base/small/medium/large)
 WHISPER_MODEL=base
 
-# Language setting (zh/en/auto)
+# Language setting for transcription (zh/en/auto)
+# Note: Whisper preserves the original audio language
 WHISPER_LANGUAGE=zh
 
+# === Summary Language Configuration ===
+# Output language for AI-generated summaries (zh/en)
+# Default: zh (Chinese)
+# - zh: Generates summaries in Chinese
+# - en: Generates summaries in English
+# Note: This controls ONLY the summary output language.
+#       Transcription language is determined by the audio content.
+SUMMARY_LANGUAGE=zh
+
+# === Audio Configuration ===
 # Audio quality (kbps)
 AUDIO_QUALITY=64
 
-# Keep audio files
+# Keep audio files after processing
 KEEP_AUDIO=false
+
+# === GitHub Upload Configuration (Optional) ===
+# GitHub personal access token (requires 'repo' scope)
+GITHUB_TOKEN=your_github_token_here
+
+# Target repository (format: username/repo)
+GITHUB_REPO=username/repository_name
+
+# Target branch (default: main)
+GITHUB_BRANCH=main
+
+# === Logging Configuration ===
+# All logs are saved to timestamped files in logs/ folder
+# Console output shows INFO level and above
+# Log files contain DEBUG level and above
 ```
 
 **Model Selection Guide:**
@@ -391,6 +456,30 @@ KEEP_AUDIO=false
 - `base`: Balanced speed and accuracy (recommended)
 - `small`: More accurate, slower
 - `medium/large`: Most accurate, requires more resources
+
+**Language Configuration:**
+- **WHISPER_LANGUAGE**: Controls audio transcription language detection (original audio language is preserved)
+- **SUMMARY_LANGUAGE**: Controls AI summary output language (zh=Chinese, en=English)
+  - Set to `zh` for Chinese summaries (default)
+  - Set to `en` for English summaries
+  - Transcripts always maintain the original audio language
+
+**GitHub Upload Configuration:**
+To enable automatic GitHub uploads after processing:
+1. Create a GitHub Personal Access Token with `repo` scope
+2. Add the following to your `.env` file:
+   ```bash
+   GITHUB_TOKEN=your_token_here
+   GITHUB_REPO=username/repo_name
+   GITHUB_BRANCH=main
+   ```
+3. Use `--upload` flag or the automated scripts (`playlist-to-github.sh`, `local-mp3-to-github.sh`)
+
+**Important Upload Behavior:**
+- Each file is uploaded to GitHub **immediately after successful processing**
+- This prevents one file failure from blocking other uploads
+- If a file fails to process, it's skipped and processing continues with the next file
+- Failed uploads are logged but don't stop the workflow
 
 ## 🧪 Running Tests
 
@@ -403,6 +492,30 @@ python -m unittest tests.test_youtube
 python -m unittest tests.test_transcriber
 python -m unittest tests.test_summarizer
 ```
+
+## 📋 Logging System
+
+The application features a comprehensive logging system:
+
+**Log Locations:**
+- **Console**: INFO level and above (user-friendly progress messages)
+- **Log Files**: DEBUG level and above (detailed technical information)
+  - Location: `logs/youtube_summarizer_[YYYYMMDD_HHMMSS].log`
+  - Format: `2025-11-02 15:30:45 - INFO - [Module] Message`
+
+**Log Contents:**
+- Processing steps and progress
+- API requests and responses
+- File operations (read/write/upload)
+- Error details with stack traces
+- GitHub upload status
+- Performance metrics
+
+**Benefits:**
+- 🔍 **Debugging**: Detailed logs help troubleshoot issues
+- 📊 **Audit Trail**: Complete record of all operations
+- 🕐 **Timestamped**: Each session gets a unique log file
+- 🎯 **Dual Output**: Console shows key info, files show everything
 
 ## ⚠️ Important Notes
 
@@ -449,8 +562,10 @@ Ensure FFmpeg is installed and added to system PATH
 
 - [x] Support for batch processing multiple videos (YouTube playlists)
 - [x] Local audio file processing support
-- [x] Language-aware AI summaries
-- [ ] GitHub repository integration for automated backup
+- [x] Configurable summary language (Chinese/English)
+- [x] Centralized logging system with timestamped log files
+- [x] GitHub repository integration for automated backup
+- [x] Individual file upload to prevent batch failures
 - [ ] Web UI interface
 - [ ] Support for more video platforms (Bilibili, Vimeo)
 - [ ] Multi-language translation features
@@ -463,4 +578,29 @@ MIT License
 
 ---
 
-**Last Updated**: 2025-11-01
+**Last Updated**: 2025-11-02
+
+## 📝 Recent Changes (2025-11-02)
+
+### Centralized Logging System
+- ✅ Replaced all `print()` statements with structured logging
+- ✅ Dual output: Console (INFO+) and log files (DEBUG+)
+- ✅ Timestamped log files in `logs/` folder
+- ✅ Comprehensive error tracking and debugging information
+
+### Individual File Upload
+- ✅ Each file uploads to GitHub immediately after processing
+- ✅ Prevents one failure from blocking other uploads
+- ✅ Improved fault tolerance for batch operations
+- ✅ Works with playlists and local MP3 folders
+
+### Configurable Summary Language
+- ✅ New `SUMMARY_LANGUAGE` option in `.env` file
+- ✅ Choose between Chinese (zh) or English (en) summaries
+- ✅ Default: Chinese (zh)
+- ✅ Transcription always preserves original audio language
+
+### Environment Configuration Updates
+- ✅ Added `SUMMARY_LANGUAGE` setting (zh/en)
+- ✅ Enhanced GitHub configuration documentation
+- ✅ Improved comments and organization in `.env.example`
