@@ -8,7 +8,8 @@
 
 - ✅ Support for YouTube public and membership videos
 - ✅ Automatic subtitle extraction or generation
-- ✅ AI-powered video content summarization (using OpenRouter free models)
+- ✅ AI-powered video content summarization (supports OpenRouter and Perplexity APIs)
+- ✅ **Configurable summary API** - Easily switch between OpenRouter and Perplexity via `.env` file
 - ✅ **Configurable summary language** - Choose between Chinese (default) or English output via `.env` file
 - ✅ **Language-aware transcription** - Whisper maintains original audio language
 - ✅ Save storage space (optional audio deletion)
@@ -49,7 +50,9 @@ Input Sources → Processing Pipeline → Output & Storage
 - Python 3.9+
 - FFmpeg 4.0+
 - 8GB+ RAM (16GB recommended)
-- OpenRouter API Key (free)
+- API Key for summarization (choose one):
+  - OpenRouter API Key (free option available)
+  - Perplexity API Key
 
 ## 🚀 Quick Start
 
@@ -90,14 +93,33 @@ pip install -r requirements.txt
 # Copy environment template
 cp .env.example .env
 
-# Edit .env file and add your OpenRouter API Key
+# Edit .env file and configure your summarization API
+# Option 1: Use OpenRouter (default)
+# SUMMARY_API=OPENROUTER
 # OPENROUTER_API_KEY=your_api_key_here
+
+# Option 2: Use Perplexity
+# SUMMARY_API=PERPLEXITY
+# PERPLEXITY_API_KEY=your_perplexity_api_key_here
 ```
 
-**Get OpenRouter API Key:**
+**Choose Your Summarization API:**
+
+You can use either OpenRouter or Perplexity AI for generating summaries. Set `SUMMARY_API` in your `.env` file to your preferred service.
+
+**Option 1: Get OpenRouter API Key (Free):**
 1. Visit [OpenRouter.ai](https://openrouter.ai/)
 2. Sign up for free
 3. Get API Key from settings page
+4. Set `SUMMARY_API=OPENROUTER` in `.env`
+5. Add your key: `OPENROUTER_API_KEY=your_api_key_here`
+
+**Option 2: Get Perplexity API Key:**
+1. Visit [Perplexity.ai](https://www.perplexity.ai/)
+2. Sign up and get API access
+3. Get API Key from your account
+4. Set `SUMMARY_API=PERPLEXITY` in `.env`
+5. Add your key: `PERPLEXITY_API_KEY=your_perplexity_api_key_here`
 
 ### 3. Run the Program
 

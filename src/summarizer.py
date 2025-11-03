@@ -11,22 +11,39 @@ logger = logging.getLogger(__name__)
 
 
 class Summarizer:
-    """Use OpenRouter API for text summarization"""
+    """Use OpenRouter or Perplexity API for text summarization"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None, api_type: Optional[str] = None):
         """
         Initialize summarizer
 
         Args:
-            api_key: OpenRouter API Key
-            model: Model name to use (defaults to OPENROUTER_MODEL from config)
+            api_key: API Key (OpenRouter or Perplexity)
+            model: Model name to use (defaults to model from config based on API type)
+            api_type: API type to use ('OPENROUTER' or 'PERPLEXITY', defaults to config.SUMMARY_API)
         """
-        self.api_key = api_key or config.OPENROUTER_API_KEY
-        self.model = model or config.OPENROUTER_MODEL
-        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.api_type = (api_type or config.SUMMARY_API).upper()
 
-        if not self.api_key:
-            raise ValueError("OpenRouter API key is required")
+        if self.api_type == 'OPENROUTER':
+            self.api_key = api_key or config.OPENROUTER_API_KEY
+            self.model = model or config.OPENROUTER_MODEL
+            self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+            if not self.api_key:
+                raise ValueError("OpenRouter API key is required")
+        elif self.api_type == 'PERPLEXITY':
+            self.api_key = api_key or config.PERPLEXITY_API_KEY
+            self.model = model or config.PERPLEXITY_MODEL
+            self.api_url = "https://api.perplexity.ai"
+            if not self.api_key:
+                raise ValueError("Perplexity API key is required")
+            # Import OpenAI client for Perplexity
+            try:
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key, base_url=self.api_url)
+            except ImportError:
+                raise ImportError("openai package is required for Perplexity API. Install it with: pip install openai")
+        else:
+            raise ValueError(f"Invalid API type: {self.api_type}. Must be 'OPENROUTER' or 'PERPLEXITY'")
 
     def create_prompt(self, transcript: str, style: str = "detailed", language: str = "en") -> str:
         """
@@ -175,6 +192,24 @@ Please output in the following format:
         """
         prompt = self.create_prompt(transcript, style, language)
 
+        if self.api_type == 'OPENROUTER':
+            return self._summarize_openrouter(prompt, max_tokens)
+        elif self.api_type == 'PERPLEXITY':
+            return self._summarize_perplexity(prompt, max_tokens)
+        else:
+            raise ValueError(f"Unsupported API type: {self.api_type}")
+
+    def _summarize_openrouter(self, prompt: str, max_tokens: int) -> str:
+        """
+        Summarize using OpenRouter API
+
+        Args:
+            prompt: Formatted prompt
+            max_tokens: Maximum token count
+
+        Returns:
+            Summary text
+        """
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -195,7 +230,7 @@ Please output in the following format:
         }
 
         try:
-            logger.info("Sending request to OpenRouter API...")
+            logger.info(f"Sending request to OpenRouter API (model: {self.model})...")
             response = requests.post(
                 self.api_url,
                 headers=headers,
@@ -211,12 +246,43 @@ Please output in the following format:
             return summary.strip()
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {e}")
+            logger.error(f"OpenRouter API request failed: {e}")
             if hasattr(e, 'response') and e.response is not None:
                 logger.error(f"Response: {e.response.text}")
             raise
         except (KeyError, IndexError) as e:
-            logger.error(f"Failed to parse API response: {e}")
+            logger.error(f"Failed to parse OpenRouter API response: {e}")
+            raise
+
+    def _summarize_perplexity(self, prompt: str, max_tokens: int) -> str:
+        """
+        Summarize using Perplexity API
+
+        Args:
+            prompt: Formatted prompt
+            max_tokens: Maximum token count
+
+        Returns:
+            Summary text
+        """
+        try:
+            logger.info(f"Sending request to Perplexity API (model: {self.model})...")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=max_tokens,
+                temperature=0.7
+            )
+
+            summary = response.choices[0].message.content
+
+            logger.info("Summary generated successfully")
+            return summary.strip()
+
+        except Exception as e:
+            logger.error(f"Perplexity API request failed: {e}")
             raise
 
     def save_summary(self, summary: str, output_path: Path,

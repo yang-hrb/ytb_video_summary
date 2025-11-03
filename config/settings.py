@@ -7,9 +7,16 @@ load_dotenv()
 class Config:
     """Configuration class - Manages all environment variables and path settings"""
 
-    # API Keys
+    # Summary API Configuration
+    SUMMARY_API = os.getenv('SUMMARY_API', 'OPENROUTER').upper()  # OPENROUTER or PERPLEXITY
+
+    # OpenRouter API
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
     OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'deepseek/deepseek-r1') # Model name to use, it may not be free!
+
+    # Perplexity API
+    PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY', '')
+    PERPLEXITY_MODEL = os.getenv('PERPLEXITY_MODEL', 'sonar-pro')  # Perplexity model to use
 
     # GitHub Integration (optional)
     GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
@@ -55,8 +62,14 @@ class Config:
 
     def validate(self):
         """Validate that required configuration is set"""
-        if not self.OPENROUTER_API_KEY:
-            raise ValueError("OPENROUTER_API_KEY is not set in .env file")
+        if self.SUMMARY_API == 'OPENROUTER':
+            if not self.OPENROUTER_API_KEY:
+                raise ValueError("OPENROUTER_API_KEY is not set in .env file")
+        elif self.SUMMARY_API == 'PERPLEXITY':
+            if not self.PERPLEXITY_API_KEY:
+                raise ValueError("PERPLEXITY_API_KEY is not set in .env file")
+        else:
+            raise ValueError(f"Invalid SUMMARY_API value: {self.SUMMARY_API}. Must be 'OPENROUTER' or 'PERPLEXITY'")
         return True
 
 config = Config()

@@ -8,7 +8,7 @@ Audio/Video Transcription & Summarization Tool - A Python CLI application that:
 - Downloads YouTube videos (including membership content) and playlists
 - Processes local MP3 files from folders
 - Transcribes audio to text using OpenAI Whisper
-- Generates AI-powered summaries using OpenRouter API
+- Generates AI-powered summaries using OpenRouter or Perplexity API
 - Optionally syncs summaries to Notion for knowledge management
 
 ## Essential Development Commands
@@ -80,7 +80,7 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 
 1. **Video Acquisition** (`youtube_handler.py`) - Downloads video metadata and attempts subtitle extraction. If subtitles unavailable, downloads audio for transcription.
 2. **Transcription** (`transcriber.py`) - Either reads existing subtitles or uses Whisper to transcribe downloaded audio to text with timestamps.
-3. **AI Summarization** (`summarizer.py`) - Sends transcript to OpenRouter API for intelligent summarization in specified style (brief/detailed).
+3. **AI Summarization** (`summarizer.py`) - Sends transcript to configured API (OpenRouter or Perplexity) for intelligent summarization in specified style (brief/detailed).
 4. **Output Generation** - Creates three output files: SRT transcript, summary by video ID, and timestamped report by title.
 
 ### Module Responsibilities
@@ -113,9 +113,11 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `read_subtitle_file()` - Parses existing SRT files to extract plain text
 
 **`src/summarizer.py`**
-- `Summarizer` class handles OpenRouter API communication
-- Creates style-specific prompts (brief vs detailed) in Chinese
-- `summarize()` - Sends transcript to deepseek/deepseek-r1 model
+- `Summarizer` class handles API communication (OpenRouter or Perplexity)
+- Creates style-specific prompts (brief vs detailed) in multiple languages
+- `summarize()` - Sends transcript to configured AI model (OpenRouter's deepseek/deepseek-r1 or Perplexity's sonar-pro)
+- `_summarize_openrouter()` - Internal method for OpenRouter API calls
+- `_summarize_perplexity()` - Internal method for Perplexity API calls (uses OpenAI client library)
 - `save_summary()` - Generates two outputs: video_id-based summary and timestamped report
 
 **`config/settings.py`**
@@ -159,14 +161,19 @@ Reports are saved with an enhanced filename format:
 
 All settings are managed through `.env` file and accessed via `config.config` singleton:
 
-**Required:**
-- **OPENROUTER_API_KEY** - Required for AI summarization
+**Required (Summarization API - choose one):**
+- **SUMMARY_API** - API provider to use ('OPENROUTER' or 'PERPLEXITY') - defaults to 'OPENROUTER'
+- **OPENROUTER_API_KEY** - Required if SUMMARY_API=OPENROUTER (default)
+  - **OPENROUTER_MODEL** - Model name to use - defaults to 'deepseek/deepseek-r1'
+- **PERPLEXITY_API_KEY** - Required if SUMMARY_API=PERPLEXITY
+  - **PERPLEXITY_MODEL** - Model name to use - defaults to 'sonar-pro'
 
 **Optional:**
 - **NOTION_API_KEY** - Notion Integration Token (for automatic Notion sync)
 - **NOTION_DATABASE_ID** - Notion Database ID (where summaries will be saved)
 - **WHISPER_MODEL** - Model size (tiny/base/small/medium/large) - defaults to 'base'
 - **WHISPER_LANGUAGE** - Language code (zh/en/auto) - defaults to 'zh'
+- **SUMMARY_LANGUAGE** - Summary output language (zh/en) - defaults to 'zh'
 - **AUDIO_QUALITY** - Download quality in kbps (32/64/96/128)
 - **KEEP_AUDIO** - Whether to preserve downloaded audio files
 
@@ -241,7 +248,7 @@ The application can process local MP3 files from a folder:
 
 **Local MP3 Processing Pipeline (3 steps):**
 1. **Transcription** - Convert MP3 to text using Whisper
-2. **AI Summarization** - Generate summary with OpenRouter API
+2. **AI Summarization** - Generate summary with configured API (OpenRouter or Perplexity)
 3. **Output** - Save transcript (SRT), summary, report, and optionally to Notion
 
 **Metadata for Local Files:**
@@ -278,16 +285,40 @@ Downloaded audio files are automatically deleted after transcription unless:
 ### Error Handling
 The application uses Python logging to both console and `youtube_summarizer.log`. When debugging issues, check this log file for detailed error traces.
 
-### OpenRouter API Configuration
-The summarizer requires specific HTTP headers for OpenRouter API:
+### Summarization API Configuration
+
+The application supports two AI summarization providers:
+
+**OpenRouter API:**
+The OpenRouter implementation requires specific HTTP headers:
 - `HTTP-Referer` - Required by OpenRouter for request tracking
 - `X-Title` - Optional but recommended for better analytics
 - `Authorization` - Bearer token with your API key
 
-If you encounter 401 Unauthorized errors, verify:
-1. OPENROUTER_API_KEY is set correctly in .env file
-2. API key format starts with "sk-or-v1-" or similar
-3. The required headers are present in the API request
+If you encounter 401 Unauthorized errors with OpenRouter, verify:
+1. SUMMARY_API is set to 'OPENROUTER' in .env file
+2. OPENROUTER_API_KEY is set correctly in .env file
+3. API key format starts with "sk-or-v1-" or similar
+4. The required headers are present in the API request
+
+**Perplexity API:**
+The Perplexity implementation uses the OpenAI client library with a custom base URL:
+- Base URL: `https://api.perplexity.ai`
+- Default model: `sonar-pro`
+- Uses standard OpenAI-compatible interface
+
+If you encounter errors with Perplexity, verify:
+1. SUMMARY_API is set to 'PERPLEXITY' in .env file
+2. PERPLEXITY_API_KEY is set correctly in .env file
+3. The `openai` package is installed (`pip install openai>=1.0.0`)
+
+**Switching Between APIs:**
+To switch between APIs, simply update the `SUMMARY_API` variable in your `.env` file:
+```
+SUMMARY_API=OPENROUTER  # Use OpenRouter
+# or
+SUMMARY_API=PERPLEXITY  # Use Perplexity
+```
 
 ## Notion Integration (Optional)
 
@@ -318,7 +349,9 @@ See [doc/NOTION_SETUP.md](doc/NOTION_SETUP.md) for detailed setup guide.
 - **FFmpeg** - Must be installed system-wide for audio processing (brew install ffmpeg on Mac)
 - **yt-dlp** - YouTube downloader (handles both public and membership content)
 - **OpenAI Whisper** - Local speech-to-text transcription
-- **OpenRouter API** - Cloud-based AI summarization using deepseek/deepseek-r1 model
+- **Summarization API** (choose one):
+  - **OpenRouter API** - Cloud-based AI summarization using deepseek/deepseek-r1 model (default)
+  - **Perplexity API** - Cloud-based AI summarization using sonar-pro model
 - **Notion API** (Optional) - Cloud-based knowledge management integration
 
 ## Testing Notes
