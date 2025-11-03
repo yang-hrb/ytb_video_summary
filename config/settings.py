@@ -9,7 +9,7 @@ class Config:
 
     # API Keys
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
-    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'deepseek/deepseek-r1-0528:free')
+    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'deepseek/deepseek-r1') # Model name to use, it may not be free!
 
     # GitHub Integration (optional)
     GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
