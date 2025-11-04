@@ -144,9 +144,12 @@ def upload_to_github(file_path: Path, remote_folder: str = "reports") -> Optiona
         return None
 
 
-def upload_logs_to_github() -> dict:
+def upload_logs_to_github(current_log_file: Optional[Path] = None) -> dict:
     """
-    Upload log files and database to GitHub repository
+    Upload current session log files and database to GitHub repository
+
+    Args:
+        current_log_file: Path to the current log file (from this session)
 
     Returns:
         Dictionary with upload results: {'db_url': url, 'log_files': [urls]}
@@ -161,7 +164,7 @@ def upload_logs_to_github() -> dict:
     try:
         handler = GitHubHandler()
 
-        # Upload database file
+        # Upload database file (contains all history)
         db_path = config.LOG_DIR / "run_track.db"
         if db_path.exists():
             logger.info("Uploading run tracking database to GitHub...")
@@ -177,18 +180,31 @@ def upload_logs_to_github() -> dict:
             except Exception as e:
                 logger.error(f"Failed to upload database: {e}")
 
-        # Upload log files (all .log and .txt files in logs directory)
-        log_files = list(config.LOG_DIR.glob("*.log")) + list(config.LOG_DIR.glob("failures_*.txt"))
+        # Upload only the current session's log files
+        log_files_to_upload = []
 
-        if log_files:
-            logger.info(f"Uploading {len(log_files)} log file(s) to GitHub...")
-            for log_file in log_files:
+        # Add current log file if provided
+        if current_log_file and current_log_file.exists():
+            log_files_to_upload.append(current_log_file)
+
+            # Get the creation time of current log file to find failure logs from this session
+            log_creation_time = current_log_file.stat().st_mtime
+
+            # Find failure logs created during this session
+            for failure_file in config.LOG_DIR.glob("failures_*.txt"):
+                # Only upload failure files created during or after this session started
+                if failure_file.stat().st_mtime >= log_creation_time:
+                    log_files_to_upload.append(failure_file)
+
+        if log_files_to_upload:
+            logger.info(f"Uploading {len(log_files_to_upload)} log file(s) from current session...")
+            for log_file in log_files_to_upload:
                 try:
                     remote_log_path = f"logs/{log_file.name}"
                     log_url = handler.upload_file(
                         log_file,
                         remote_log_path,
-                        commit_message=f"Update log: {log_file.name}"
+                        commit_message=f"Add log: {log_file.name}"
                     )
                     results['log_files'].append({'file': log_file.name, 'url': log_url})
                     logger.info(f"Log file uploaded: {log_file.name}")

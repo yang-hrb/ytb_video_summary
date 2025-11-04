@@ -9,6 +9,9 @@ from pathlib import Path
 from datetime import datetime
 from colorama import Fore, Style
 
+# Module-level variable to store current log file path
+_current_log_file = None
+
 
 class ColoredConsoleFormatter(logging.Formatter):
     """Custom formatter that adds colors to console output"""
@@ -41,6 +44,8 @@ def setup_logging(log_dir: Path = None) -> logging.Logger:
     Returns:
         Configured logger instance
     """
+    global _current_log_file
+
     if log_dir is None:
         # Default to logs directory in project root
         from config import config
@@ -52,6 +57,9 @@ def setup_logging(log_dir: Path = None) -> logging.Logger:
     # Create timestamped log file name
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_file = log_dir / f'ytb_summarizer_{timestamp}.log'
+
+    # Store current log file path
+    _current_log_file = log_file
 
     # Create root logger
     logger = logging.getLogger('ytb_summarizer')
@@ -99,3 +107,14 @@ def get_logger(name: str = 'ytb_summarizer') -> logging.Logger:
         Logger instance
     """
     return logging.getLogger(name)
+
+
+def get_current_log_file() -> Path:
+    """
+    Get the current log file path.
+
+    Returns:
+        Path to the current log file, or None if logging not initialized
+    """
+    return _current_log_file
+
