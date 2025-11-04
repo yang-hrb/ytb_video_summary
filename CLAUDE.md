@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Audio/Video Transcription & Summarization Tool - A Python CLI application that:
 - Downloads YouTube videos (including membership content) and playlists
+- Downloads and processes Apple Podcasts episodes and shows
 - Processes local MP3 files from folders
 - Transcribes audio to text using OpenAI Whisper
 - Generates AI-powered summaries using OpenRouter or Perplexity API
@@ -52,6 +53,13 @@ python src/main.py -video "https://youtube.com/watch?v=xxxxx"
 python src/main.py -list "https://youtube.com/playlist?list=xxxxx"
 python src/main.py -list "https://youtube.com/watch?v=xxxxx&list=xxxxx"
 
+# Apple Podcasts single episode (latest)
+python src/main.py --apple-podcast-single "https://podcasts.apple.com/us/podcast/podcast-name/id123456789"
+python src/main.py "https://podcasts.apple.com/us/podcast/podcast-name/id123456789"  # Auto-detect
+
+# Apple Podcasts show (all episodes)
+python src/main.py --apple-podcast-list "https://podcasts.apple.com/us/podcast/podcast-name/id123456789"
+
 # Local MP3 folder
 python src/main.py -local /path/to/mp3/folder
 python src/main.py -local ./audio_files --style detailed
@@ -59,6 +67,7 @@ python src/main.py -local ./audio_files --style detailed
 # With options
 python src/main.py -video "URL" --style brief --keep-audio
 python src/main.py -list "URL" --cookies cookies.txt
+python src/main.py --apple-podcast-single "URL" --style detailed
 ```
 
 ### Testing
@@ -87,13 +96,15 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 
 **`src/main.py`**
 - CLI entry point with argument parsing
-- Supports three input modes: `-video` (YouTube video), `-list` (YouTube playlist), `-local` (MP3 folder)
-- Orchestrates the entire pipeline for videos, playlists, and local audio files
+- Supports five input modes: `-video` (YouTube video), `-list` (YouTube playlist), `--apple-podcast-single` (single podcast episode), `--apple-podcast-list` (all episodes from podcast show), `-local` (MP3 folder)
+- Orchestrates the entire pipeline for videos, playlists, podcasts, and local audio files
 - `process_video()` - Processes a single YouTube video through the 4-step pipeline
 - `process_playlist()` - Processes all videos in a YouTube playlist sequentially
+- `process_apple_podcast()` - Processes a single Apple Podcasts episode through the 3-step pipeline
+- `process_apple_podcast_show()` - Processes all episodes from an Apple Podcasts show sequentially
 - `process_local_mp3()` - Processes a single local MP3 file through the 3-step pipeline
 - `process_local_folder()` - Batch processes all MP3 files in a folder
-- Automatically detects URLs and routes to appropriate handler
+- Automatically detects URLs and routes to appropriate handler (YouTube, Apple Podcasts, or local)
 - Handles user interaction with colorama-formatted output
 - Manages configuration validation before processing
 
@@ -104,6 +115,17 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `download_audio()` - Downloads best audio quality when subtitles unavailable
 - `get_playlist_videos()` - Extracts all video URLs from a YouTube playlist
 - `process_youtube_video()` - Convenience function that decides subtitle vs audio path
+
+**`src/apple_podcasts_handler.py`**
+- `ApplePodcastsHandler` class handles Apple Podcasts RSS feed parsing and audio download
+- `extract_podcast_id()` - Extracts podcast ID from Apple Podcasts URL
+- `get_podcast_info()` - Fetches podcast metadata from iTunes Lookup API
+- `get_rss_feed()` - Parses RSS feed using feedparser
+- `get_episode_info()` - Extracts specific episode information from RSS feed
+- `get_all_episodes()` - Retrieves all episodes with audio from RSS feed
+- `download_audio()` - Downloads audio file from episode URL
+- `process_apple_podcast_episode()` - Convenience function for processing single episode
+- `get_podcast_episodes()` - Convenience function for getting all episodes from a show
 
 **`src/transcriber.py`**
 - `Transcriber` class manages Whisper model lifecycle
@@ -132,6 +154,8 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `extract_video_id()` - Parses various YouTube URL formats
 - `is_playlist_url()` - Detects if a URL is a YouTube playlist
 - `extract_playlist_id()` - Extracts playlist ID from YouTube URLs
+- `is_apple_podcasts_url()` - Detects if a URL is an Apple Podcasts URL
+- `extract_podcast_id()` - Extracts podcast ID from Apple Podcasts URL
 
 **`src/notion_handler.py`**
 - `NotionHandler` class handles Notion API communication
@@ -212,7 +236,7 @@ The Config class auto-creates all required directories (`output/`, `temp/`, subd
 ### Python API Usage
 The tool can be imported and used programmatically:
 ```python
-from src.main import process_video, process_playlist, process_local_mp3, process_local_folder
+from src.main import process_video, process_playlist, process_apple_podcast, process_apple_podcast_show, process_local_mp3, process_local_folder
 from pathlib import Path
 
 # Process single YouTube video
@@ -221,7 +245,7 @@ result = process_video(
     keep_audio=False,
     summary_style="detailed"
 )
-# Returns dict with: video_id, video_info, transcript, transcript_file, summary_file, report_file, notion_url
+# Returns dict with: video_id, video_info, transcript, transcript_file, summary_file, report_file, github_url
 
 # Process YouTube playlist
 results = process_playlist(
@@ -231,12 +255,27 @@ results = process_playlist(
 )
 # Returns list of result dicts, one for each successfully processed video
 
+# Process single Apple Podcasts episode
+result = process_apple_podcast(
+    url="https://podcasts.apple.com/us/podcast/podcast-name/id123456789",
+    episode_index=0,  # 0 = latest episode
+    summary_style="detailed"
+)
+# Returns dict with: identifier, podcast_info, episode_info, transcript, transcript_file, summary_file, report_file, github_url
+
+# Process all episodes from Apple Podcasts show
+results = process_apple_podcast_show(
+    url="https://podcasts.apple.com/us/podcast/podcast-name/id123456789",
+    summary_style="detailed"
+)
+# Returns list of result dicts, one for each successfully processed episode
+
 # Process single local MP3 file
 result = process_local_mp3(
     mp3_path=Path("/path/to/audio.mp3"),
     summary_style="detailed"
 )
-# Returns dict with: file_name, file_path, transcript, transcript_file, summary_file, report_file, notion_url
+# Returns dict with: file_name, file_path, transcript, transcript_file, summary_file, report_file, github_url
 
 # Process folder of MP3 files
 results = process_local_folder(
@@ -259,6 +298,45 @@ The application can process entire YouTube playlists:
 - If a video fails (age-restricted, removed, private, etc.), the error is logged
 - Processing continues with the next video in the playlist
 - Final summary shows count of successful/failed videos with error details
+
+### Apple Podcasts Support
+The application can download and process Apple Podcasts episodes:
+- Uses iTunes Lookup API to get podcast metadata and RSS feed URL
+- Parses RSS feed using feedparser to extract episode information
+- Downloads audio files directly from RSS feed enclosures
+- Supports both single episode and full show processing
+- Automatically detects Apple Podcasts URLs in default mode
+
+**Apple Podcasts URL Format:**
+- `https://podcasts.apple.com/us/podcast/podcast-name/id123456789`
+- `https://podcasts.apple.com/podcast/id123456789`
+- The podcast ID is the key identifier (e.g., `id123456789`)
+
+**Single Episode Mode:**
+- Use `--apple-podcast-single` flag or just paste the URL (auto-detect)
+- Downloads and processes the latest episode from the podcast
+- Episode index can be specified programmatically (0 = latest)
+
+**Full Show Mode:**
+- Use `--apple-podcast-list` flag
+- Downloads and processes all episodes from the podcast show
+- Continues processing even if individual episodes fail
+- Provides progress tracking (e.g., "Processing episode [3/10]")
+
+**Apple Podcasts Processing Pipeline (3 steps):**
+1. **Episode Acquisition** - Fetch podcast metadata from iTunes API, parse RSS feed, download audio
+2. **Transcription** - Convert audio to text using Whisper
+3. **AI Summarization** - Generate summary with configured API (OpenRouter or Perplexity)
+
+**Metadata for Podcast Episodes:**
+- Title: Episode title from RSS feed
+- Uploader: Podcast artist/creator name
+- Duration: Extracted from iTunes duration tag in RSS feed
+
+**Error Handling:**
+- If RSS feed is not available for a podcast, an error is raised
+- Some podcasts may hide their RSS feed through Podcasts Connect
+- Failed episodes are logged and processing continues with remaining episodes
 
 ### Local MP3 Support
 The application can process local MP3 files from a folder:
@@ -437,6 +515,7 @@ See [doc/NOTION_SETUP.md](doc/NOTION_SETUP.md) for detailed setup guide.
 
 - **FFmpeg** - Must be installed system-wide for audio processing (brew install ffmpeg on Mac)
 - **yt-dlp** - YouTube downloader (handles both public and membership content)
+- **feedparser** - RSS feed parser for Apple Podcasts support
 - **OpenAI Whisper** - Local speech-to-text transcription
 - **Summarization API** (choose one):
   - **OpenRouter API** - Cloud-based AI summarization using deepseek/deepseek-r1 model (default)

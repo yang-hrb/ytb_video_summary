@@ -19,9 +19,10 @@ if str(_PROJECT_ROOT) not in sys.path:
 from config import config
 from src.logger import setup_logging, get_logger, get_current_log_file
 from src.youtube_handler import process_youtube_video, get_playlist_videos
+from src.apple_podcasts_handler import process_apple_podcast_episode, get_podcast_episodes
 from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcriber
 from src.summarizer import summarize_transcript
-from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename
+from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename, is_apple_podcasts_url
 from src.github_handler import upload_to_github, upload_logs_to_github
 from src.run_tracker import get_tracker, log_failure
 
@@ -36,8 +37,8 @@ def print_banner():
     """Print program banner"""
     banner = f"""
 {Fore.CYAN}╔═══════════════════════════════════════════════════════════╗
-║   Audio/Video Transcript & Summarizer v2.0                ║
-║   Supports: YouTube Videos/Playlists + Local MP3          ║
+║   Audio/Video Transcript & Summarizer v2.1                ║
+║   YouTube + Apple Podcasts + Local MP3                    ║
 ╚═══════════════════════════════════════════════════════════╝{Style.RESET_ALL}
 """
     # Print banner to console (not logged to file)
@@ -495,10 +496,242 @@ def process_playlist(
         raise
 
 
+def process_apple_podcast(
+    url: str,
+    episode_index: int = 0,
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
+) -> dict:
+    """
+    Process a single Apple Podcasts episode through the complete pipeline
+
+    Args:
+        url: Apple Podcasts URL
+        episode_index: Episode index (0 = latest)
+        summary_style: Summary style (brief/detailed)
+        upload_to_github_repo: Whether to upload report to GitHub
+
+    Returns:
+        Dictionary containing processing results
+    """
+    # Initialize run tracking
+    tracker = get_tracker()
+    run_id = None
+    identifier = None
+
+    try:
+        # Step 1: Download podcast episode audio
+        log_step("1/3", "Fetching podcast episode information...")
+        result = process_apple_podcast_episode(url, episode_index)
+
+        podcast_info = result['podcast_info']
+        episode_info = result['episode_info']
+        audio_path = result['audio_path']
+        identifier = result['identifier']
+
+        # Start tracking this run
+        run_id = tracker.start_run('podcast', url, identifier)
+        tracker.update_status(run_id, 'working')
+
+        logger.info(f"  Podcast: {podcast_info['title']}")
+        logger.info(f"  Episode: {episode_info['title']}")
+        if episode_info.get('duration'):
+            logger.info(f"  Duration: {episode_info['duration']}s")
+
+        # Step 2: Transcribe audio
+        log_step("2/3", "Transcribing audio with Whisper...")
+        logger.info(f"  Audio file: {audio_path}")
+        logger.info(f"  File size: {get_file_size_mb(audio_path):.2f} MB")
+
+        transcriber = Transcriber()
+        transcribe_result = transcriber.transcribe_audio(audio_path)
+        transcript = transcriber.get_transcript_text(transcribe_result)
+
+        # Detect language from transcription
+        whisper_language = transcribe_result.get('language', 'en')
+
+        # Save SRT file
+        srt_path = config.TRANSCRIPT_DIR / f"{identifier}_transcript.srt"
+        transcriber.save_as_srt(transcribe_result, srt_path)
+
+        # Clean up audio file
+        if not config.KEEP_AUDIO:
+            logger.info("  Cleaning up audio file...")
+            audio_path.unlink()
+
+        logger.info(f"  Transcript length: {len(transcript)} characters")
+        logger.info(f"  Detected language: {whisper_language}")
+
+        # Step 3: Generate AI summary
+        log_step("3/3", "Generating AI summary...")
+        summary_language = config.SUMMARY_LANGUAGE
+        logger.info(f"  Using style: {summary_style}")
+        logger.info(f"  Summary language: {summary_language}")
+
+        # Create virtual video_info for podcast episodes
+        video_info = {
+            'title': episode_info['title'],
+            'uploader': podcast_info.get('artist', podcast_info.get('title', 'Unknown Podcast')),
+            'duration': episode_info.get('duration', 0)
+        }
+
+        summary_result = summarize_transcript(
+            transcript,
+            identifier,
+            video_info,
+            style=summary_style,
+            language=summary_language,
+            video_url=url
+        )
+
+        # Output results
+        log_step("Done", "Processing complete!")
+
+        summary_file = summary_result['summary_path']
+        report_file = summary_result['report_path']
+        github_url = None
+
+        logger.info("Output files:")
+        logger.info(f"  Transcript: {srt_path}")
+        logger.info(f"  Summary: {summary_file}")
+        if report_file:
+            logger.info(f"  Report: {report_file}")
+
+        # Upload to GitHub if requested
+        if upload_to_github_repo and report_file:
+            log_step("Bonus", "Uploading report to GitHub...")
+            try:
+                github_url = upload_to_github(report_file)
+                if github_url:
+                    logger.info(f"GitHub URL: {github_url}")
+            except Exception as e:
+                logger.warning(f"GitHub upload failed: {e}")
+
+        log_success("Podcast episode processing complete!")
+
+        # Mark run as done
+        if run_id:
+            tracker.update_status(run_id, 'done')
+
+        return {
+            'identifier': identifier,
+            'podcast_info': podcast_info,
+            'episode_info': episode_info,
+            'transcript': transcript,
+            'transcript_file': srt_path,
+            'summary_file': summary_file,
+            'report_file': report_file,
+            'github_url': github_url
+        }
+
+    except Exception as e:
+        log_error(f"Processing failed: {e}")
+        logger.exception("Error processing podcast episode")
+
+        # Mark run as failed and log to failure file
+        if run_id:
+            tracker.update_status(run_id, 'failed', str(e))
+        if identifier:
+            log_failure('podcast', identifier, url, str(e))
+
+        raise
+
+
+def process_apple_podcast_show(
+    url: str,
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
+) -> list:
+    """
+    Process all episodes from an Apple Podcasts show
+
+    Args:
+        url: Apple Podcasts show URL
+        summary_style: Summary style (brief/detailed)
+        upload_to_github_repo: Whether to upload reports to GitHub after each episode
+
+    Returns:
+        List containing all episode processing results
+    """
+    try:
+        # Get all episodes from show
+        log_step("0", "Fetching podcast show information...")
+
+        episodes = get_podcast_episodes(url)
+
+        if not episodes:
+            log_error("No episodes found in podcast show")
+            return []
+
+        podcast_info = episodes[0]['podcast_info']
+        logger.info(f"  Podcast: {podcast_info['title']}")
+        logger.info(f"  Found {len(episodes)} episodes")
+        logger.info("Starting podcast show processing...")
+
+        # Process each episode
+        results = []
+        failed_episodes = []
+
+        for idx, episode_info in enumerate(episodes):
+            logger.info("="*60)
+            logger.info(f"Processing episode [{idx+1}/{len(episodes)}]")
+            logger.info(f"  Title: {episode_info['title']}")
+            logger.info("="*60)
+
+            try:
+                # Process the episode (episode_index is same as current index)
+                result = process_apple_podcast(
+                    url,
+                    episode_index=idx,
+                    summary_style=summary_style,
+                    upload_to_github_repo=False  # We'll handle upload here
+                )
+
+                # Upload to GitHub immediately after processing (if requested)
+                if upload_to_github_repo and result.get('report_file'):
+                    try:
+                        logger.info("Uploading report to GitHub for this episode...")
+                        github_url = upload_to_github(result['report_file'])
+                        result['github_url'] = github_url
+                        if github_url:
+                            logger.info(f"GitHub URL: {github_url}")
+                    except Exception as e:
+                        logger.warning(f"GitHub upload failed for episode {idx+1}: {e}")
+                        result['github_url'] = None
+
+                results.append(result)
+            except Exception as e:
+                log_error(f"Episode {idx+1} processing failed: {e}")
+                logger.exception(f"Failed to process episode {idx+1}: {episode_info['title']}")
+                failed_episodes.append((idx+1, episode_info['title'], str(e)))
+                # Continue processing next episode
+                continue
+
+        # Output summary
+        logger.info("="*60)
+        logger.info("Podcast show processing complete")
+        logger.info("="*60)
+
+        logger.info(f"Successfully processed: {len(results)}/{len(episodes)} episodes")
+
+        if failed_episodes:
+            logger.warning("Failed episodes:")
+            for idx, title, error in failed_episodes:
+                logger.warning(f"  [{idx}] {title}")
+                logger.warning(f"      Error: {error}")
+
+        return results
+
+    except Exception as e:
+        log_error(f"Podcast show processing failed: {e}")
+        logger.exception("Error processing podcast show")
+        raise
+
+
 def main():
     """Main function - CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='Audio/Video Transcription & Summarization Tool - Supports YouTube and Local MP3',
+        description='Audio/Video Transcription & Summarization Tool - Supports YouTube, Apple Podcasts, and Local MP3',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -510,13 +743,19 @@ Examples:
   python src/main.py -list "https://youtube.com/playlist?list=xxxxx"
   python src/main.py -list "https://youtube.com/watch?v=xxxxx&list=xxxxx"
 
+  # Process single Apple Podcasts episode (latest)
+  python src/main.py --apple-podcast-single "https://podcasts.apple.com/us/podcast/podcast-name/id123456789"
+
+  # Process all episodes from Apple Podcasts show
+  python src/main.py --apple-podcast-list "https://podcasts.apple.com/us/podcast/podcast-name/id123456789"
+
   # Process local MP3 folder
   python src/main.py -local /path/to/mp3/folder
   python src/main.py -local ./audio_files --style detailed
         """
     )
 
-    # Create mutually exclusive group: -video, -list, -local (choose one)
+    # Create mutually exclusive group: -video, -list, -local, --apple-podcast-single, --apple-podcast-list (choose one)
     input_group = parser.add_mutually_exclusive_group()
 
     input_group.add_argument(
@@ -531,6 +770,20 @@ Examples:
         type=str,
         metavar='URL',
         help='YouTube playlist URL'
+    )
+
+    input_group.add_argument(
+        '--apple-podcast-single',
+        type=str,
+        metavar='URL',
+        help='Apple Podcasts URL (process latest episode only)'
+    )
+
+    input_group.add_argument(
+        '--apple-podcast-list',
+        type=str,
+        metavar='URL',
+        help='Apple Podcasts URL (process all episodes from show)'
     )
 
     input_group.add_argument(
@@ -606,6 +859,25 @@ Examples:
                 upload_to_github_repo=args.upload
             )
 
+        elif args.apple_podcast_single:
+            # Apple Podcasts single episode mode
+            logger.info("Apple Podcasts single episode mode")
+            result = process_apple_podcast(
+                args.apple_podcast_single,
+                episode_index=0,  # Latest episode
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
+            )
+
+        elif args.apple_podcast_list:
+            # Apple Podcasts show (all episodes) mode
+            logger.info("Apple Podcasts show mode")
+            results = process_apple_podcast_show(
+                args.apple_podcast_list,
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
+            )
+
         elif args.list:
             # YouTube playlist mode
             logger.info("YouTube playlist mode")
@@ -629,8 +901,16 @@ Examples:
             )
 
         elif args.url:
-            # Default mode (backward compatible) - auto-detect YouTube URL type
-            if is_playlist_url(args.url):
+            # Default mode (backward compatible) - auto-detect URL type
+            if is_apple_podcasts_url(args.url):
+                logger.info("Detected Apple Podcasts URL (single episode)")
+                result = process_apple_podcast(
+                    args.url,
+                    episode_index=0,
+                    summary_style=args.style,
+                    upload_to_github_repo=args.upload
+                )
+            elif is_playlist_url(args.url):
                 logger.info("Detected YouTube playlist")
                 results = process_playlist(
                     args.url,
@@ -655,9 +935,11 @@ Examples:
             logger.info("Usage:")
             logger.info("  python src/main.py -video <YouTube video URL>")
             logger.info("  python src/main.py -list <YouTube playlist URL>")
+            logger.info("  python src/main.py --apple-podcast-single <Apple Podcasts URL>")
+            logger.info("  python src/main.py --apple-podcast-list <Apple Podcasts URL>")
             logger.info("  python src/main.py -local <MP3 folder path>")
             logger.info("Or use default mode:")
-            logger.info("  python src/main.py <YouTube URL>")
+            logger.info("  python src/main.py <URL>")
             logger.info("Use --help for detailed help")
             sys.exit(1)
 
