@@ -728,6 +728,201 @@ def process_apple_podcast_show(
         raise
 
 
+def detect_input_type(line: str) -> str:
+    """
+    Detect the type of input from a line
+
+    Args:
+        line: Input line from batch file
+
+    Returns:
+        Input type: 'youtube_video', 'youtube_playlist', 'apple_podcast', 'local_folder', or 'unknown'
+    """
+    line = line.strip()
+
+    # Check if it's a URL
+    if line.startswith('http://') or line.startswith('https://'):
+        if is_apple_podcasts_url(line):
+            return 'apple_podcast'
+        elif is_playlist_url(line):
+            return 'youtube_playlist'
+        else:
+            # Assume it's a YouTube video URL
+            return 'youtube_video'
+    else:
+        # Check if it's a local path
+        path = Path(line)
+        if path.exists() and path.is_dir():
+            return 'local_folder'
+
+    return 'unknown'
+
+
+def process_batch_file(
+    batch_file: Path,
+    cookies_file: Optional[str] = None,
+    keep_audio: bool = False,
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
+) -> dict:
+    """
+    Process multiple inputs from a batch file
+
+    Batch file format:
+    - Each line contains one input (YouTube URL, Apple Podcast URL, or local MP3 folder path)
+    - Empty lines are ignored
+    - Lines starting with # are treated as comments and ignored
+
+    Args:
+        batch_file: Path to batch input file
+        cookies_file: Path to cookies.txt file (for YouTube)
+        keep_audio: Whether to keep downloaded audio files (for YouTube)
+        summary_style: Summary style (brief/detailed)
+        upload_to_github_repo: Whether to upload reports to GitHub
+
+    Returns:
+        Dictionary containing processing statistics and results
+    """
+    try:
+        log_step("Batch", "Reading batch input file...")
+
+        if not batch_file.exists():
+            log_error(f"Batch file does not exist: {batch_file}")
+            return {'success': False, 'error': 'File not found'}
+
+        # Read all lines from file
+        with open(batch_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        # Filter out empty lines and comments
+        inputs = []
+        for i, line in enumerate(lines, 1):
+            line = line.strip()
+            if line and not line.startswith('#'):
+                inputs.append((i, line))
+
+        if not inputs:
+            log_error("No valid inputs found in batch file")
+            return {'success': False, 'error': 'No valid inputs'}
+
+        logger.info(f"Found {len(inputs)} inputs to process")
+        logger.info("="*60)
+
+        # Process each input
+        results = {
+            'total': len(inputs),
+            'processed': 0,
+            'failed': 0,
+            'items': []
+        }
+
+        for idx, (line_num, input_line) in enumerate(inputs, 1):
+            logger.info("")
+            logger.info("="*60)
+            logger.info(f"Processing input [{idx}/{len(inputs)}] (line {line_num})")
+            logger.info(f"Input: {input_line}")
+            logger.info("="*60)
+
+            # Detect input type
+            input_type = detect_input_type(input_line)
+            logger.info(f"Detected type: {input_type}")
+
+            item_result = {
+                'line_number': line_num,
+                'input': input_line,
+                'type': input_type,
+                'success': False,
+                'error': None
+            }
+
+            try:
+                if input_type == 'youtube_video':
+                    result = process_video(
+                        input_line,
+                        cookies_file=cookies_file,
+                        keep_audio=keep_audio,
+                        summary_style=summary_style,
+                        upload_to_github_repo=upload_to_github_repo
+                    )
+                    item_result['success'] = True
+                    item_result['result'] = result
+                    results['processed'] += 1
+
+                elif input_type == 'youtube_playlist':
+                    result = process_playlist(
+                        input_line,
+                        cookies_file=cookies_file,
+                        keep_audio=keep_audio,
+                        summary_style=summary_style,
+                        upload_to_github_repo=upload_to_github_repo
+                    )
+                    item_result['success'] = True
+                    item_result['result'] = result
+                    results['processed'] += 1
+
+                elif input_type == 'apple_podcast':
+                    result = process_apple_podcast(
+                        input_line,
+                        episode_index=0,  # Latest episode
+                        summary_style=summary_style,
+                        upload_to_github_repo=upload_to_github_repo
+                    )
+                    item_result['success'] = True
+                    item_result['result'] = result
+                    results['processed'] += 1
+
+                elif input_type == 'local_folder':
+                    folder_path = Path(input_line)
+                    result = process_local_folder(
+                        folder_path,
+                        summary_style=summary_style,
+                        upload_to_github_repo=upload_to_github_repo
+                    )
+                    item_result['success'] = True
+                    item_result['result'] = result
+                    results['processed'] += 1
+
+                else:
+                    error_msg = f"Unknown input type: {input_line}"
+                    log_error(error_msg)
+                    item_result['error'] = error_msg
+                    results['failed'] += 1
+
+            except Exception as e:
+                error_msg = str(e)
+                log_error(f"Failed to process input: {error_msg}")
+                logger.exception(f"Error processing line {line_num}")
+                item_result['error'] = error_msg
+                results['failed'] += 1
+
+            results['items'].append(item_result)
+
+        # Output summary
+        logger.info("")
+        logger.info("="*60)
+        logger.info("BATCH PROCESSING COMPLETE")
+        logger.info("="*60)
+        logger.info(f"Total inputs: {results['total']}")
+        logger.info(f"Successfully processed: {results['processed']}")
+        logger.info(f"Failed: {results['failed']}")
+
+        if results['failed'] > 0:
+            logger.warning("")
+            logger.warning("Failed inputs:")
+            for item in results['items']:
+                if not item['success']:
+                    logger.warning(f"  Line {item['line_number']}: {item['input']}")
+                    logger.warning(f"    Error: {item['error']}")
+
+        results['success'] = True
+        return results
+
+    except Exception as e:
+        log_error(f"Batch processing failed: {e}")
+        logger.exception("Error in batch processing")
+        return {'success': False, 'error': str(e)}
+
+
 def main():
     """Main function - CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -752,6 +947,10 @@ Examples:
   # Process local MP3 folder
   python src/main.py -local /path/to/mp3/folder
   python src/main.py -local ./audio_files --style detailed
+
+  # Process batch input file (mix of URLs and paths)
+  python src/main.py --batch input.txt
+  python src/main.py --batch input.txt --style brief --upload
         """
     )
 
@@ -791,6 +990,13 @@ Examples:
         type=str,
         metavar='PATH',
         help='Local MP3 folder path'
+    )
+
+    input_group.add_argument(
+        '--batch',
+        type=str,
+        metavar='FILE',
+        help='Batch input file (one URL or path per line)'
     )
 
     # Keep positional argument for backward compatibility
@@ -840,7 +1046,25 @@ Examples:
 
     # Determine processing mode
     try:
-        if args.local:
+        if args.batch:
+            # Batch file mode
+            batch_file = Path(args.batch)
+            if not batch_file.exists():
+                log_error(f"Batch file does not exist: {batch_file}")
+                sys.exit(1)
+
+            logger.info("Batch processing mode")
+            logger.info(f"Batch file: {batch_file.absolute()}")
+
+            results = process_batch_file(
+                batch_file,
+                cookies_file=args.cookies,
+                keep_audio=args.keep_audio,
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
+            )
+
+        elif args.local:
             # Local MP3 folder mode
             folder_path = Path(args.local)
             if not folder_path.exists():
@@ -938,6 +1162,7 @@ Examples:
             logger.info("  python src/main.py --apple-podcast-single <Apple Podcasts URL>")
             logger.info("  python src/main.py --apple-podcast-list <Apple Podcasts URL>")
             logger.info("  python src/main.py -local <MP3 folder path>")
+            logger.info("  python src/main.py --batch <input file>")
             logger.info("Or use default mode:")
             logger.info("  python src/main.py <URL>")
             logger.info("Use --help for detailed help")
