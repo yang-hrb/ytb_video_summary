@@ -226,3 +226,4 @@ output/
 youtube_summarizer.log
 .DS_Store
 logs/run_track.db
+input.txt
