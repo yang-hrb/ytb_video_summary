@@ -359,8 +359,8 @@ def summarize_transcript(transcript: str, video_id: str,
         # Generate report filename
         uploader = video_info.get('uploader', '')
 
-        # Check if it's a local MP3 file
-        is_local_mp3 = (uploader == 'Local Audio')
+        # Check if it's a local MP3 or MP4 file
+        is_local_mp3 = (uploader in ['Local Audio', 'Local Video'])
 
         report_filename = create_report_filename(
             video_info['title'],

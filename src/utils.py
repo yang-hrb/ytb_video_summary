@@ -350,3 +350,67 @@ def extract_podcast_id(url: str) -> Optional[str]:
     if match:
         return match.group(1)
     return None
+
+
+def extract_audio_from_mp4(mp4_path: Path, output_path: Optional[Path] = None) -> Path:
+    """
+    Extract audio from MP4 file using FFmpeg
+
+    Args:
+        mp4_path: Path to MP4 file
+        output_path: Optional output path for audio file (defaults to temp directory with .mp3 extension)
+
+    Returns:
+        Path to extracted audio file
+    """
+    import subprocess
+
+    # Determine output path
+    if output_path is None:
+        from config import config
+        output_path = config.TEMP_DIR / f"{mp4_path.stem}.mp3"
+
+    # Ensure output directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Find FFmpeg
+    ffmpeg_location = find_ffmpeg_location()
+    if ffmpeg_location:
+        ffmpeg_cmd = str(Path(ffmpeg_location) / 'ffmpeg')
+    else:
+        ffmpeg_cmd = 'ffmpeg'  # Hope it's in PATH
+
+    # Extract audio using FFmpeg
+    # -i: input file
+    # -vn: disable video recording
+    # -acodec libmp3lame: use MP3 codec
+    # -q:a 2: audio quality (2 is high quality, ~170-210 kbps)
+    # -y: overwrite output file if exists
+    cmd = [
+        ffmpeg_cmd,
+        '-i', str(mp4_path),
+        '-vn',
+        '-acodec', 'libmp3lame',
+        '-q:a', '2',
+        '-y',
+        str(output_path)
+    ]
+
+    try:
+        logger.info(f"Extracting audio from MP4: {mp4_path.name}")
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
+        logger.info(f"Audio extracted successfully: {output_path.name}")
+        return output_path
+    except subprocess.CalledProcessError as e:
+        error_msg = f"FFmpeg failed to extract audio: {e.stderr.decode('utf-8', errors='ignore')}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+    except FileNotFoundError:
+        error_msg = "FFmpeg not found. Please install FFmpeg and ensure it's in PATH or set FFMPEG_LOCATION in .env"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)

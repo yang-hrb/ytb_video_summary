@@ -8,6 +8,7 @@ Audio/Video Transcription & Summarization Tool - A Python CLI application that:
 - Downloads YouTube videos (including membership content) and playlists
 - Downloads and processes Apple Podcasts episodes and shows
 - Processes local MP3 files from folders
+- Processes local MP4 video files and folders (extracts audio automatically)
 - Transcribes audio to text using OpenAI Whisper
 - Generates AI-powered summaries using OpenRouter or Perplexity API
 - Optionally syncs summaries to Notion for knowledge management
@@ -64,10 +65,19 @@ python src/main.py --apple-podcast-list "https://podcasts.apple.com/us/podcast/p
 python src/main.py -local /path/to/mp3/folder
 python src/main.py -local ./audio_files --style detailed
 
+# Local MP4 single file
+python src/main.py --mp4 /path/to/video.mp4
+python src/main.py --mp4 ./video.mp4 --style brief
+
+# Local MP4 folder
+python src/main.py --mp4-folder /path/to/mp4/folder
+python src/main.py --mp4-folder ./videos --style detailed
+
 # With options
 python src/main.py -video "URL" --style brief --keep-audio
 python src/main.py -list "URL" --cookies cookies.txt
 python src/main.py --apple-podcast-single "URL" --style detailed
+python src/main.py --mp4 "video.mp4" --upload
 ```
 
 ### Testing
@@ -96,14 +106,16 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 
 **`src/main.py`**
 - CLI entry point with argument parsing
-- Supports five input modes: `-video` (YouTube video), `-list` (YouTube playlist), `--apple-podcast-single` (single podcast episode), `--apple-podcast-list` (all episodes from podcast show), `-local` (MP3 folder)
-- Orchestrates the entire pipeline for videos, playlists, podcasts, and local audio files
+- Supports seven input modes: `-video` (YouTube video), `-list` (YouTube playlist), `--apple-podcast-single` (single podcast episode), `--apple-podcast-list` (all episodes from podcast show), `-local` (MP3 folder), `--mp4` (single MP4 file), `--mp4-folder` (MP4 folder)
+- Orchestrates the entire pipeline for videos, playlists, podcasts, and local audio/video files
 - `process_video()` - Processes a single YouTube video through the 4-step pipeline
 - `process_playlist()` - Processes all videos in a YouTube playlist sequentially
 - `process_apple_podcast()` - Processes a single Apple Podcasts episode through the 3-step pipeline
 - `process_apple_podcast_show()` - Processes all episodes from an Apple Podcasts show sequentially
 - `process_local_mp3()` - Processes a single local MP3 file through the 3-step pipeline
 - `process_local_folder()` - Batch processes all MP3 files in a folder
+- `process_local_mp4()` - Processes a single local MP4 file through the 4-step pipeline (audio extraction → transcription → summarization → output)
+- `process_local_mp4_folder()` - Batch processes all MP4 files in a folder
 - Automatically detects URLs and routes to appropriate handler (YouTube, Apple Podcasts, or local)
 - Handles user interaction with colorama-formatted output
 - Manages configuration validation before processing
@@ -156,6 +168,7 @@ The application follows a 4-step sequential pipeline (implemented in `src/main.p
 - `extract_playlist_id()` - Extracts playlist ID from YouTube URLs
 - `is_apple_podcasts_url()` - Detects if a URL is an Apple Podcasts URL
 - `extract_podcast_id()` - Extracts podcast ID from Apple Podcasts URL
+- `extract_audio_from_mp4()` - Extracts audio from MP4 files using FFmpeg (converts to MP3 format)
 
 **`src/notion_handler.py`**
 - `NotionHandler` class handles Notion API communication
@@ -236,7 +249,7 @@ The Config class auto-creates all required directories (`output/`, `temp/`, subd
 ### Python API Usage
 The tool can be imported and used programmatically:
 ```python
-from src.main import process_video, process_playlist, process_apple_podcast, process_apple_podcast_show, process_local_mp3, process_local_folder
+from src.main import process_video, process_playlist, process_apple_podcast, process_apple_podcast_show, process_local_mp3, process_local_folder, process_local_mp4, process_local_mp4_folder
 from pathlib import Path
 
 # Process single YouTube video
@@ -283,6 +296,22 @@ results = process_local_folder(
     summary_style="detailed"
 )
 # Returns list of result dicts, one for each successfully processed MP3 file
+
+# Process single local MP4 file
+result = process_local_mp4(
+    mp4_path=Path("/path/to/video.mp4"),
+    summary_style="detailed",
+    upload_to_github_repo=False
+)
+# Returns dict with: file_name, file_path, transcript, transcript_file, summary_file, report_file, github_url
+
+# Process folder of MP4 files
+results = process_local_mp4_folder(
+    folder_path=Path("/path/to/mp4/folder"),
+    summary_style="detailed",
+    upload_to_github_repo=False
+)
+# Returns list of result dicts, one for each successfully processed MP4 file
 ```
 
 ### Playlist Support
@@ -356,6 +385,37 @@ The application can process local MP3 files from a folder:
 - Title: MP3 filename (without extension)
 - Uploader: "Local Audio"
 - Duration: Extracted from audio transcription
+
+### Local MP4 Support
+The application can process local MP4 video files (single file or folder):
+- Automatically extracts audio from MP4 files using FFmpeg
+- Transcribes the extracted audio using Whisper
+- Generates AI summaries for each video file
+- Optionally uploads to GitHub
+- Continues processing even if individual files fail
+- Provides progress tracking and error summary
+- Automatically cleans up extracted audio files after processing
+
+**Local MP4 Processing Pipeline (4 steps):**
+1. **Audio Extraction** - Extract audio from MP4 using FFmpeg (converts to MP3 format)
+2. **Transcription** - Convert audio to text using Whisper
+3. **AI Summarization** - Generate summary with configured API (OpenRouter or Perplexity)
+4. **Output** - Save transcript (SRT), summary, report, and optionally upload to GitHub
+
+**Metadata for Local MP4 Files:**
+- Title: MP4 filename (without extension)
+- Uploader: "Local Video"
+- Duration: Extracted from audio transcription
+
+**Shell Script for Batch Processing:**
+The `full_auto_run_mp4.sh` script provides automated batch processing for MP4 folders:
+```bash
+# Process all MP4 files in a folder with auto-upload to GitHub (if configured)
+./full_auto_run_mp4.sh /path/to/mp4/folder
+
+# Or run without arguments and follow the prompts
+./full_auto_run_mp4.sh
+```
 
 ### Membership Video Support
 Uses cookies for authentication (works for both single videos and playlists):

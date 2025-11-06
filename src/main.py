@@ -22,7 +22,7 @@ from src.youtube_handler import process_youtube_video, get_playlist_videos
 from src.apple_podcasts_handler import process_apple_podcast_episode, get_podcast_episodes
 from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcriber
 from src.summarizer import summarize_transcript
-from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename, is_apple_podcasts_url
+from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename, is_apple_podcasts_url, extract_audio_from_mp4
 from src.github_handler import upload_to_github, upload_logs_to_github
 from src.run_tracker import get_tracker, log_failure
 
@@ -37,8 +37,8 @@ def print_banner():
     """Print program banner"""
     banner = f"""
 {Fore.CYAN}╔═══════════════════════════════════════════════════════════╗
-║   Audio/Video Transcript & Summarizer v2.1                ║
-║   YouTube + Apple Podcasts + Local MP3                    ║
+║   Audio/Video Transcript & Summarizer v2.2                ║
+║   YouTube + Apple Podcasts + Local MP3/MP4                ║
 ╚═══════════════════════════════════════════════════════════╝{Style.RESET_ALL}
 """
     # Print banner to console (not logged to file)
@@ -398,6 +398,233 @@ def process_local_folder(
     except Exception as e:
         log_error(f"Folder processing failed: {e}")
         logger.exception("Error processing local folder")
+        raise
+
+
+def process_local_mp4(
+    mp4_path: Path,
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
+) -> dict:
+    """
+    Process a local MP4 file through the complete pipeline
+
+    Args:
+        mp4_path: Path to MP4 file
+        summary_style: Summary style (brief/detailed)
+        upload_to_github_repo: Whether to upload report to GitHub
+
+    Returns:
+        Dictionary containing processing results
+    """
+    # Initialize run tracking
+    tracker = get_tracker()
+    run_id = None
+    file_name = None
+    audio_path = None
+
+    try:
+        file_name = mp4_path.stem  # Filename without extension
+
+        # Start tracking this run
+        run_id = tracker.start_run('local', str(mp4_path), mp4_path.name)
+        tracker.update_status(run_id, 'working')
+
+        logger.info(f"  File: {mp4_path.name}")
+        logger.info(f"  Size: {get_file_size_mb(mp4_path):.2f} MB")
+
+        # Step 1: Extract audio from MP4
+        log_step("1/4", "Extracting audio from MP4...")
+        audio_path = extract_audio_from_mp4(mp4_path)
+        logger.info(f"  Audio file: {audio_path.name}")
+        logger.info(f"  Audio size: {get_file_size_mb(audio_path):.2f} MB")
+
+        # Step 2: Transcribe audio
+        log_step("2/4", "Transcribing audio with Whisper...")
+
+        transcriber = Transcriber()
+        result = transcriber.transcribe_audio(audio_path)
+        transcript = transcriber.get_transcript_text(result)
+
+        # Detect language from transcription (for reference only)
+        whisper_language = result.get('language', 'en')
+
+        # Save SRT file
+        srt_path = config.TRANSCRIPT_DIR / f"{file_name}_transcript.srt"
+        transcriber.save_as_srt(result, srt_path)
+
+        logger.info(f"  Transcript length: {len(transcript)} characters")
+        logger.info(f"  Detected language: {whisper_language}")
+
+        # Step 3: Generate AI summary
+        log_step("3/4", "Generating AI summary...")
+        summary_language = config.SUMMARY_LANGUAGE  # Use configured summary language
+        logger.info(f"  Using style: {summary_style}")
+        logger.info(f"  Summary language: {summary_language}")
+
+        # Create virtual video_info for local files
+        video_info = {
+            'title': file_name,
+            'uploader': 'Local Video',
+            'duration': int(result.get('segments', [{}])[-1].get('end', 0)) if result.get('segments') else 0
+        }
+
+        summary_result = summarize_transcript(
+            transcript,
+            file_name,
+            video_info,
+            style=summary_style,
+            language=summary_language,
+            video_url=None
+        )
+
+        # Step 4: Clean up and output results
+        log_step("4/4", "Processing complete!")
+
+        # Clean up extracted audio file
+        if audio_path and audio_path.exists():
+            logger.info("  Cleaning up extracted audio file...")
+            audio_path.unlink()
+
+        summary_file = summary_result['summary_path']
+        report_file = summary_result['report_path']
+        github_url = None
+
+        logger.info("Output files:")
+        logger.info(f"  Transcript: {srt_path}")
+        logger.info(f"  Summary: {summary_file}")
+        if report_file:
+            logger.info(f"  Report: {report_file}")
+
+        # Upload to GitHub if requested
+        if upload_to_github_repo and report_file:
+            log_step("Bonus", "Uploading report to GitHub...")
+            try:
+                github_url = upload_to_github(report_file)
+                if github_url:
+                    logger.info(f"GitHub URL: {github_url}")
+            except Exception as e:
+                logger.warning(f"GitHub upload failed: {e}")
+
+        log_success("MP4 processing complete!")
+
+        # Mark run as done
+        if run_id:
+            tracker.update_status(run_id, 'done')
+
+        return {
+            'file_name': file_name,
+            'file_path': mp4_path,
+            'transcript': transcript,
+            'transcript_file': srt_path,
+            'summary_file': summary_file,
+            'report_file': report_file,
+            'github_url': github_url
+        }
+
+    except Exception as e:
+        log_error(f"Processing failed: {e}")
+        logger.exception("Error processing local MP4")
+
+        # Clean up extracted audio file on error
+        if audio_path and audio_path.exists():
+            try:
+                audio_path.unlink()
+            except:
+                pass
+
+        # Mark run as failed and log to failure file
+        if run_id:
+            tracker.update_status(run_id, 'failed', str(e))
+        if file_name:
+            log_failure('local', mp4_path.name, str(mp4_path), str(e))
+
+        raise
+
+
+def process_local_mp4_folder(
+    folder_path: Path,
+    summary_style: str = "detailed",
+    upload_to_github_repo: bool = False
+) -> list:
+    """
+    Process all MP4 files in a local folder
+
+    Args:
+        folder_path: Path to folder
+        summary_style: Summary style (brief/detailed)
+        upload_to_github_repo: Whether to upload reports to GitHub after each file
+
+    Returns:
+        List containing all file processing results
+    """
+    try:
+        # Find all MP4 files
+        log_step("0", "Scanning for MP4 files...")
+        mp4_files = list(folder_path.glob("*.mp4"))
+
+        if not mp4_files:
+            log_error(f"No MP4 files found in folder: {folder_path}")
+            return []
+
+        logger.info(f"  Found {len(mp4_files)} MP4 files")
+        logger.info("Starting MP4 file processing...")
+
+        # Process each file
+        results = []
+        failed_files = []
+
+        for idx, mp4_file in enumerate(mp4_files, 1):
+            logger.info("="*60)
+            logger.info(f"Processing file [{idx}/{len(mp4_files)}]")
+            logger.info("="*60)
+
+            try:
+                # Process the MP4 file
+                result = process_local_mp4(
+                    mp4_file,
+                    summary_style=summary_style,
+                    upload_to_github_repo=False  # We'll handle upload here for each iteration
+                )
+
+                # Upload to GitHub immediately after processing (if requested)
+                if upload_to_github_repo and result.get('report_file'):
+                    try:
+                        logger.info("Uploading report to GitHub for this file...")
+                        github_url = upload_to_github(result['report_file'])
+                        result['github_url'] = github_url
+                        if github_url:
+                            logger.info(f"GitHub URL: {github_url}")
+                    except Exception as e:
+                        logger.warning(f"GitHub upload failed for file {idx}: {e}")
+                        result['github_url'] = None
+
+                results.append(result)
+            except Exception as e:
+                log_error(f"File {idx} processing failed: {e}")
+                logger.exception(f"Failed to process file {idx}: {mp4_file}")
+                failed_files.append((idx, mp4_file.name, str(e)))
+                # Continue processing next file
+                continue
+
+        # Output summary
+        logger.info("="*60)
+        logger.info("Folder processing complete")
+        logger.info("="*60)
+
+        logger.info(f"Successfully processed: {len(results)}/{len(mp4_files)} files")
+
+        if failed_files:
+            logger.warning("Failed files:")
+            for idx, filename, error in failed_files:
+                logger.warning(f"  [{idx}] {filename}")
+                logger.warning(f"      Error: {error}")
+
+        return results
+
+    except Exception as e:
+        log_error(f"Folder processing failed: {e}")
+        logger.exception("Error processing local MP4 folder")
         raise
 
 
@@ -926,7 +1153,7 @@ def process_batch_file(
 def main():
     """Main function - CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='Audio/Video Transcription & Summarization Tool - Supports YouTube, Apple Podcasts, and Local MP3',
+        description='Audio/Video Transcription & Summarization Tool - Supports YouTube, Apple Podcasts, Local MP3 and MP4',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -947,6 +1174,14 @@ Examples:
   # Process local MP3 folder
   python src/main.py -local /path/to/mp3/folder
   python src/main.py -local ./audio_files --style detailed
+
+  # Process single local MP4 file
+  python src/main.py --mp4 /path/to/video.mp4
+  python src/main.py --mp4 ./video.mp4 --style brief
+
+  # Process local MP4 folder
+  python src/main.py --mp4-folder /path/to/mp4/folder
+  python src/main.py --mp4-folder ./videos --style detailed
 
   # Process batch input file (mix of URLs and paths)
   python src/main.py --batch input.txt
@@ -990,6 +1225,20 @@ Examples:
         type=str,
         metavar='PATH',
         help='Local MP3 folder path'
+    )
+
+    input_group.add_argument(
+        '--mp4',
+        type=str,
+        metavar='PATH',
+        help='Local MP4 file path (single file)'
+    )
+
+    input_group.add_argument(
+        '--mp4-folder',
+        type=str,
+        metavar='PATH',
+        help='Local MP4 folder path (process all MP4 files)'
     )
 
     input_group.add_argument(
@@ -1083,6 +1332,44 @@ Examples:
                 upload_to_github_repo=args.upload
             )
 
+        elif args.mp4:
+            # Local MP4 single file mode
+            mp4_path = Path(args.mp4)
+            if not mp4_path.exists():
+                log_error(f"File does not exist: {mp4_path}")
+                sys.exit(1)
+            if not mp4_path.is_file():
+                log_error(f"Path is not a file: {mp4_path}")
+                sys.exit(1)
+
+            logger.info("Local MP4 single file mode")
+            logger.info(f"File path: {mp4_path.absolute()}")
+
+            result = process_local_mp4(
+                mp4_path,
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
+            )
+
+        elif args.mp4_folder:
+            # Local MP4 folder mode
+            folder_path = Path(args.mp4_folder)
+            if not folder_path.exists():
+                log_error(f"Folder does not exist: {folder_path}")
+                sys.exit(1)
+            if not folder_path.is_dir():
+                log_error(f"Path is not a folder: {folder_path}")
+                sys.exit(1)
+
+            logger.info("Local MP4 folder mode")
+            logger.info(f"Folder path: {folder_path.absolute()}")
+
+            results = process_local_mp4_folder(
+                folder_path,
+                summary_style=args.style,
+                upload_to_github_repo=args.upload
+            )
+
         elif args.apple_podcast_single:
             # Apple Podcasts single episode mode
             logger.info("Apple Podcasts single episode mode")
@@ -1162,6 +1449,8 @@ Examples:
             logger.info("  python src/main.py --apple-podcast-single <Apple Podcasts URL>")
             logger.info("  python src/main.py --apple-podcast-list <Apple Podcasts URL>")
             logger.info("  python src/main.py -local <MP3 folder path>")
+            logger.info("  python src/main.py --mp4 <MP4 file path>")
+            logger.info("  python src/main.py --mp4-folder <MP4 folder path>")
             logger.info("  python src/main.py --batch <input file>")
             logger.info("Or use default mode:")
             logger.info("  python src/main.py <URL>")
