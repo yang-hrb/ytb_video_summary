@@ -1,0 +1,24 @@
+# Batch Input File Example
+# Lines starting with # are comments and will be ignored
+# Empty lines are also ignored
+# Each non-comment line should contain ONE of the following:
+#   - YouTube video URL
+#   - YouTube playlist URL
+#   - Apple Podcasts episode URL
+#   - Local MP3 folder path (absolute or relative)
+
+# Example YouTube video
+# https://www.youtube.com/watch?v=dQw4w9WgXcQ
+
+# Example YouTube playlist
+# https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf
+
+# Example Apple Podcasts episode (processes latest episode)
+# https://podcasts.apple.com/us/podcast/the-daily/id1200361736
+
+# Example local MP3 folder
+# /path/to/your/mp3/folder
+# ./audio_files
+
+# You can mix different input types in the same file
+# The program will automatically detect the type and process accordingly

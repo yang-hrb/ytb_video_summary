@@ -17,6 +17,8 @@
 - ✅ Timestamped subtitle files (SRT format)
 - ✅ YouTube playlist processing support
 - ✅ Local MP3 file processing support
+- ✅ **Apple Podcasts support** - Download and transcribe podcast episodes
+- ✅ **Batch processing** - Process multiple inputs from a text file
 - ✅ **Centralized logging system** - All logs saved to timestamped files in `logs/` folder
 - ✅ **Individual file uploads** - Each processed file uploads to GitHub immediately to prevent batch failures
 
@@ -28,14 +30,19 @@ Input Sources → Processing Pipeline → Output & Storage
   YouTube          1. Download          Local Files
   Playlist           Audio/Subs           (output/)
      or          2. Transcription            ↓
-  Local MP3      3. AI Summary        GitHub Upload
-   Folder        4. Save & Upload      (optional)
+Apple Podcasts   3. AI Summary        GitHub Upload
+     or          4. Save & Upload      (optional)
+  Local MP3
+   Folder
+     or
+  Batch File
+ (mix of all)
 ```
 
 **Processing Flow:**
-1. **Input**: YouTube URL, Playlist, or Local MP3 folder
+1. **Input**: YouTube URL, Playlist, Apple Podcast, Local MP3 folder, or Batch file
 2. **Transcription**: Whisper converts audio to text (preserves original language)
-3. **Summarization**: OpenRouter AI generates summary (configurable output language)
+3. **Summarization**: OpenRouter/Perplexity AI generates summary (configurable output language)
 4. **Output**: SRT transcript + Markdown summary + Enhanced report
 5. **Upload**: Individual files uploaded to GitHub immediately after each success
 
@@ -137,6 +144,9 @@ You can use either OpenRouter or Perplexity AI for generating summaries. Set `SU
 
 # Process local MP3 folder and upload to GitHub
 ./local-mp3-to-github.sh
+
+# Process batch input file (mix of URLs and paths)
+./batch-run.sh
 ```
 
 **Features of GitHub Upload Scripts:**
@@ -175,6 +185,16 @@ python src/main.py -video "URL" --cookies cookies.txt
 python src/main.py -video "URL" --upload
 python src/main.py -list "URL" --upload
 python src/main.py -local /path/to/mp3 --upload
+
+# Apple Podcasts (single episode - latest)
+python src/main.py --apple-podcast-single "https://podcasts.apple.com/..."
+
+# Apple Podcasts (all episodes from show)
+python src/main.py --apple-podcast-list "https://podcasts.apple.com/..."
+
+# Batch processing (mix of URLs and paths)
+python src/main.py --batch input.txt
+python src/main.py --batch input.txt --style brief --upload
 ```
 
 ## 📖 Usage Guide
@@ -185,15 +205,18 @@ python src/main.py -local /path/to/mp3 --upload
 python src/main.py [INPUT] [OPTIONS]
 
 Input Arguments (mutually exclusive):
-  -video URL             YouTube video URL (default if no flag specified)
-  -list URL              YouTube playlist URL
-  -local PATH            Local MP3 folder path
+  -video URL                      YouTube video URL (default if no flag specified)
+  -list URL                       YouTube playlist URL
+  --apple-podcast-single URL      Apple Podcasts URL (latest episode only)
+  --apple-podcast-list URL        Apple Podcasts URL (all episodes from show)
+  -local PATH                     Local MP3 folder path
+  --batch FILE                    Batch input file (one URL or path per line)
 
 Optional Arguments:
-  --cookies FILE         Path to cookies.txt file (for membership videos)
-  --keep-audio          Keep downloaded audio files (YouTube only)
-  --style {brief|detailed}  Summary style (default: detailed)
-  --upload              Upload report files to GitHub repository
+  --cookies FILE                  Path to cookies.txt file (for membership videos)
+  --keep-audio                   Keep downloaded audio files (YouTube only)
+  --style {brief|detailed}       Summary style (default: detailed)
+  --upload                       Upload report files to GitHub repository
 ```
 
 ### Processing Membership Videos
@@ -232,6 +255,61 @@ results = process_local_folder(
 print(f"Transcript file: {result['transcript_file']}")
 print(f"Summary file: {result['summary_file']}")
 print(f"Report file: {result['report_file']}")
+```
+
+### Batch Processing from Text File
+
+Process multiple inputs (mix of YouTube videos, playlists, Apple Podcasts, and local MP3 folders) from a single text file:
+
+**1. Create Batch Input File**
+
+Create a text file (e.g., `input.txt`) with one input per line:
+
+```text
+# This is a comment - lines starting with # are ignored
+# You can mix different input types in the same file
+
+# YouTube video
+https://www.youtube.com/watch?v=xxxxx
+
+# YouTube playlist
+https://www.youtube.com/playlist?list=xxxxx
+
+# Apple Podcasts episode
+https://podcasts.apple.com/us/podcast/podcast-name/id123456789
+
+# Local MP3 folder
+/path/to/mp3/folder
+./audio_files
+```
+
+**2. Run Batch Processing**
+
+```bash
+# Using the helper script (recommended)
+./batch-run.sh
+
+# Or manually
+python src/main.py --batch input.txt
+python src/main.py --batch input.txt --style brief --upload
+```
+
+**Features:**
+- ✅ **Auto-detection**: Automatically detects input type (YouTube, Apple Podcasts, local path)
+- ✅ **Mixed inputs**: Process different types in a single batch
+- ✅ **Comments support**: Lines starting with # are ignored
+- ✅ **Error tolerance**: Failed items don't stop the batch processing
+- ✅ **Progress tracking**: Shows detailed progress for each item
+- ✅ **Summary report**: Final summary of successful and failed items
+
+**Example Workflow:**
+```
+1. Create input.txt with your URLs and paths
+2. Run: ./batch-run.sh
+3. Choose summary style (brief/detailed)
+4. Choose options (cookies, keep-audio, upload)
+5. Processing starts... (shows progress for each item)
+6. Done! Summary shows successful and failed items
 ```
 
 ### Automated Playlist & MP3 Processing with GitHub Upload

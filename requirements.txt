@@ -6,6 +6,7 @@ python-dotenv>=1.0.0
 # API
 requests>=2.31.0
 openai>=1.0.0  # For Perplexity API (also compatible with OpenRouter)
+feedparser>=6.0.0  # For Apple Podcasts RSS feed parsing
 
 # Audio Processing
 ffmpeg-python>=0.2.0
