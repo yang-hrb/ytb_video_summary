@@ -4,7 +4,7 @@
 .claude/
 temp/
 logs/  # includes run_track.db and failure logs
-
+failure*.txt
 
 
 # Byte-compiled / optimized / DLL files
