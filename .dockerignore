@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!DOCKER_README.md
+doc/
+
+# Output and temporary files
+output/
+temp/
+logs/
+*.log
+*.db
+*.txt
+!requirements.txt
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Scripts (not needed in container)
+*.sh
+!entrypoint.sh
+
+# Tests
+tests/
+*.test.py
+
+# CI/CD
+.github/
+.gitlab-ci.yml

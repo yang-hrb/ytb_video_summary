@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  youtube-playlist-summarizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ytb-playlist-summarizer
+
+    # Environment variables
+    env_file:
+      - .env
+
+    # Volume mappings
+    volumes:
+      # Output directories - persist results
+      - ./output:/app/output
+      - ./logs:/app/logs
+
+      # Optional: cookies file for membership videos
+      - ./cookies.txt:/app/cookies.txt:ro
+
+      # Optional: custom .env file
+      - ./.env:/app/.env:ro
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Network mode
+    network_mode: bridge
+
+    # Command: Process a YouTube playlist
+    # Override this in docker-compose.override.yml or via command line
+    command: >
+      -list "${PLAYLIST_URL:-}"
+      --style detailed
+      ${COOKIES_FLAG:-}
+      ${UPLOAD_FLAG:-}
+
+  # Optional: Web interface (future enhancement)
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.web
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - youtube-playlist-summarizer
+
+# Volumes for data persistence
+volumes:
+  output_data:
+  logs_data:

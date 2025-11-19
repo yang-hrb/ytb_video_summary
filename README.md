@@ -4,6 +4,29 @@
 
 🎥 Automatically transcribe YouTube videos (including membership content) to text and generate AI-powered summaries
 
+## 🚀 Quick Start with Docker (Recommended)
+
+The fastest way to use this tool is via Docker:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/yang-hrb/ytb_video_summary.git
+cd ytb_video_summary
+
+# 2. Configure environment variables
+cp .env.example .env
+# Edit .env and add your OPENROUTER_API_KEY or PERPLEXITY_API_KEY
+
+# 3. Run with Docker
+./run-docker.sh "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
+```
+
+**That's it!** Results will be saved in `output/` directory.
+
+For detailed Docker deployment instructions, see [DOCKER_README.md](DOCKER_README.md).
+
+For production deployment (e.g., ytb-download.yangyu.us), see the "Deploy to Production" section in [DOCKER_README.md](DOCKER_README.md).
+
 ## ✨ Features
 
 - ✅ Support for YouTube public and membership videos
