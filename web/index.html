@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YouTube Summary Web UI</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      background: #f7f7fb;
+      color: #1f2937;
+    }
+    header {
+      background: #111827;
+      color: white;
+      padding: 16px 24px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      padding: 16px 24px 24px;
+    }
+    section {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 16px;
+    }
+    label {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #6b7280;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 6px;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary {
+      background: #2563eb;
+      color: white;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button.danger {
+      background: #dc2626;
+      color: white;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .status.running {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .status.succeeded {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status.failed,
+    .status.canceled {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .log-panel {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: "Fira Code", Consolas, monospace;
+      height: 360px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px 6px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    th {
+      color: #6b7280;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .history-url {
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: inline-block;
+    }
+    .history-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .output-links a {
+      display: block;
+      color: #2563eb;
+      font-size: 13px;
+      margin-top: 4px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <header>YouTube Summary Web UI</header>
+  <main>
+    <section>
+      <h3>History</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Created</th>
+            <th>URL</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </section>
+    <section>
+      <h3>New Job</h3>
+      <label for="urlInput">YouTube video or playlist URL</label>
+      <input id="urlInput" type="text" placeholder="https://youtube.com/..." />
+
+      <label for="styleSelect">Summary Style</label>
+      <select id="styleSelect">
+        <option value="detailed" selected>Detailed</option>
+        <option value="brief">Brief</option>
+      </select>
+
+      <div class="row">
+        <button id="runButton" class="primary">Run</button>
+        <button id="cancelButton" class="danger" disabled>Cancel</button>
+        <button id="downloadButton" class="secondary" disabled>Download log</button>
+      </div>
+
+      <div class="row" style="margin-top: 12px; align-items: center;">
+        <div id="statusPill" class="status">Idle</div>
+        <div id="exitCode"></div>
+      </div>
+
+      <div class="output-links" id="outputLinks"></div>
+
+      <h3 style="margin-top: 20px;">Logs</h3>
+      <div id="logPanel" class="log-panel"></div>
+    </section>
+  </main>
+
+  <script>
+    const historyBody = document.getElementById("historyBody");
+    const runButton = document.getElementById("runButton");
+    const cancelButton = document.getElementById("cancelButton");
+    const downloadButton = document.getElementById("downloadButton");
+    const urlInput = document.getElementById("urlInput");
+    const styleSelect = document.getElementById("styleSelect");
+    const logPanel = document.getElementById("logPanel");
+    const statusPill = document.getElementById("statusPill");
+    const exitCode = document.getElementById("exitCode");
+    const outputLinks = document.getElementById("outputLinks");
+
+    let currentJobId = null;
+    let eventSource = null;
+    let stickToBottom = true;
+
+    function setStatus(status, exitCodeValue) {
+      statusPill.textContent = status || "Idle";
+      statusPill.className = `status ${status || ""}`;
+      if (exitCodeValue !== undefined && exitCodeValue !== null) {
+        exitCode.textContent = `Exit code: ${exitCodeValue}`;
+      } else {
+        exitCode.textContent = "";
+      }
+      cancelButton.disabled = status !== "running";
+    }
+
+    function clearLogs() {
+      logPanel.textContent = "";
+    }
+
+    function appendLog(line) {
+      if (!line) {
+        return;
+      }
+      logPanel.textContent += `${line}\n`;
+      if (stickToBottom) {
+        logPanel.scrollTop = logPanel.scrollHeight;
+      }
+    }
+
+    function setOutputLinks(paths) {
+      outputLinks.innerHTML = "";
+      if (!paths || paths.length === 0) {
+        return;
+      }
+      const title = document.createElement("div");
+      title.textContent = "Outputs:";
+      title.style.marginTop = "8px";
+      outputLinks.appendChild(title);
+      paths.forEach((path) => {
+        const link = document.createElement("a");
+        link.href = path;
+        link.textContent = path;
+        link.target = "_blank";
+        outputLinks.appendChild(link);
+      });
+    }
+
+    function attachEventSource(jobId) {
+      if (eventSource) {
+        eventSource.close();
+      }
+      eventSource = new EventSource(`/api/jobs/${jobId}/events`);
+      eventSource.addEventListener("log", (event) => {
+        appendLog(event.data);
+      });
+      eventSource.addEventListener("status", (event) => {
+        const data = JSON.parse(event.data);
+        setStatus(data.status, data.exit_code);
+        if (["succeeded", "failed", "canceled"].includes(data.status)) {
+          eventSource.close();
+        }
+      });
+      eventSource.onerror = () => {
+        eventSource.close();
+      };
+    }
+
+    async function loadHistory() {
+      const response = await fetch("/api/jobs?limit=20");
+      if (!response.ok) {
+        return;
+      }
+      const jobs = await response.json();
+      renderHistory(jobs);
+    }
+
+    function renderHistory(jobs) {
+      historyBody.innerHTML = "";
+      jobs.forEach((job) => {
+        const row = document.createElement("tr");
+        const createdAt = job.created_at ? new Date(job.created_at).toLocaleString() : "-";
+        row.innerHTML = `
+          <td>${createdAt}</td>
+          <td><span class="history-url" title="${job.url}">${job.url}</span></td>
+          <td><span class="status ${job.status}">${job.status}</span></td>
+          <td class="history-actions"></td>
+        `;
+        const actionsCell = row.querySelector(".history-actions");
+        const viewButton = document.createElement("button");
+        viewButton.textContent = "View";
+        viewButton.className = "secondary";
+        viewButton.addEventListener("click", () => viewJob(job.job_id));
+
+        const downloadLink = document.createElement("a");
+        downloadLink.textContent = "Download log";
+        downloadLink.href = `/api/jobs/${job.job_id}/log`;
+        downloadLink.className = "secondary";
+        downloadLink.style.padding = "6px 10px";
+        downloadLink.style.borderRadius = "6px";
+        downloadLink.style.background = "#e5e7eb";
+        downloadLink.style.textDecoration = "none";
+        downloadLink.style.color = "#111827";
+
+        actionsCell.appendChild(viewButton);
+        actionsCell.appendChild(downloadLink);
+        historyBody.appendChild(row);
+      });
+    }
+
+    async function viewJob(jobId) {
+      currentJobId = jobId;
+      clearLogs();
+      stickToBottom = true;
+      downloadButton.disabled = false;
+      downloadButton.onclick = () => {
+        window.location.href = `/api/jobs/${jobId}/log`;
+      };
+
+      const response = await fetch(`/api/jobs/${jobId}`);
+      if (response.ok) {
+        const job = await response.json();
+        setStatus(job.status, job.exit_code);
+        setOutputLinks(job.output_paths);
+        if (job.status === "running") {
+          attachEventSource(jobId);
+        } else if (eventSource) {
+          eventSource.close();
+        }
+      }
+
+      const logResponse = await fetch(`/api/jobs/${jobId}/log`);
+      if (logResponse.ok) {
+        const logText = await logResponse.text();
+        logText.split("\n").forEach((line) => appendLog(line));
+      }
+    }
+
+    runButton.addEventListener("click", async () => {
+      const url = urlInput.value.trim();
+      if (!url) {
+        appendLog("[UI] Please enter a URL.");
+        return;
+      }
+      const payload = {
+        url,
+        style: styleSelect.value,
+        upload: true,
+      };
+      const response = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        appendLog("[UI] Failed to start job.");
+        return;
+      }
+      const data = await response.json();
+      currentJobId = data.job_id;
+      clearLogs();
+      appendLog("[UI] Job submitted.");
+      setStatus("queued");
+      downloadButton.disabled = false;
+      downloadButton.onclick = () => {
+        window.location.href = `/api/jobs/${currentJobId}/log`;
+      };
+      attachEventSource(currentJobId);
+      await loadHistory();
+    });
+
+    cancelButton.addEventListener("click", async () => {
+      if (!currentJobId) {
+        return;
+      }
+      await fetch(`/api/jobs/${currentJobId}/cancel`, { method: "POST" });
+    });
+
+    logPanel.addEventListener("scroll", () => {
+      const threshold = 20;
+      stickToBottom =
+        logPanel.scrollTop + logPanel.clientHeight >=
+        logPanel.scrollHeight - threshold;
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>
