@@ -219,6 +219,19 @@ Optional Arguments:
   --upload                       Upload report files to GitHub repository
 ```
 
+### Web UI
+
+Run the lightweight local web UI (single-page) to submit jobs and stream logs:
+
+```bash
+pip install -r requirements.txt
+python server/app.py
+# Or
+uvicorn server.app:app --host 0.0.0.0 --port 8000
+```
+
+Open <http://localhost:8000> in your browser. The UI supports real-time logs, canceling running jobs, downloading logs, and browsing recent job history.
+
 ### Processing Membership Videos
 
 1. Install browser extension [Get cookies.txt](https://chrome.google.com/webstore/detail/get-cookiestxt/bgaddhkoddajcdgocldbbfleckgcbcid)
@@ -666,7 +679,7 @@ Ensure FFmpeg is installed and added to system PATH
 - [x] Centralized logging system with timestamped log files
 - [x] GitHub repository integration for automated backup
 - [x] Individual file upload to prevent batch failures
-- [ ] Web UI interface
+- [x] Web UI interface
 - [ ] Support for more video platforms (Bilibili, Vimeo)
 - [ ] Multi-language translation features
 - [ ] Export to PDF/Word formats
