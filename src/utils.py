@@ -3,7 +3,7 @@ import re
 import logging
 import shutil
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # Configure logging
@@ -125,6 +125,32 @@ def format_duration(seconds: int) -> str:
         return f"{minutes:02d}:{secs:02d}"
 
 
+def format_upload_time(upload_date: Optional[str] = None,
+                       upload_timestamp: Optional[int] = None) -> Optional[str]:
+    """
+    Format upload time for display.
+
+    Args:
+        upload_date: Upload date string in YYYYMMDD format
+        upload_timestamp: Unix timestamp (seconds)
+
+    Returns:
+        Formatted upload time string, or None if unavailable
+    """
+    if upload_timestamp:
+        return datetime.fromtimestamp(upload_timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
+
+    if upload_date:
+        try:
+            parsed = datetime.strptime(upload_date, "%Y%m%d").replace(tzinfo=timezone.utc)
+            return parsed.strftime("%Y-%m-%d")
+        except ValueError:
+            logger.warning("Failed to parse upload_date: %s", upload_date)
+            return upload_date
+
+    return None
+
+
 def format_timestamp(seconds: float) -> str:
     """
     Convert seconds to SRT timestamp format
@@ -244,13 +270,21 @@ def extract_playlist_id(url: str) -> Optional[str]:
     return None
 
 
-def create_summary_header(title: str, duration: str, timestamp: Optional[str] = None) -> str:
+def create_summary_header(
+    title: str,
+    duration: str,
+    uploader: Optional[str] = None,
+    upload_time: Optional[str] = None,
+    timestamp: Optional[str] = None
+) -> str:
     """
     Create summary file header
 
     Args:
         title: Video title
         duration: Video duration
+        uploader: Uploader or channel name
+        upload_time: Upload time string
         timestamp: Generation timestamp
 
     Returns:
@@ -259,15 +293,23 @@ def create_summary_header(title: str, duration: str, timestamp: Optional[str] = 
     if timestamp is None:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    header = f"""# {title}
+    header_lines = [f"# {title}", ""]
 
-**Duration**: {duration}
-**Generated**: {timestamp}
+    if uploader:
+        header_lines.append(f"**Uploader**: {uploader}")
+    if upload_time:
+        header_lines.append(f"**Uploaded**: {upload_time}")
 
----
+    header_lines.extend([
+        f"**Duration**: {duration}",
+        f"**Generated**: {timestamp}",
+        "",
+        "---",
+        "",
+        ""
+    ])
 
-"""
-    return header
+    return "\n".join(header_lines)
 
 
 def ensure_dir_exists(directory: Path):

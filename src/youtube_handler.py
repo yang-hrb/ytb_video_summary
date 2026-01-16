@@ -52,6 +52,7 @@ class YouTubeHandler:
                     'description': info.get('description'),
                     'uploader': info.get('uploader'),
                     'upload_date': info.get('upload_date'),
+                    'timestamp': info.get('timestamp'),
                     'view_count': info.get('view_count'),
                     'has_subtitles': bool(info.get('subtitles') or info.get('automatic_captions'))
                 }

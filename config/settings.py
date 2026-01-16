@@ -41,6 +41,10 @@ class Config:
     # Browser
     BROWSER_TYPE = os.getenv('BROWSER_TYPE', 'chrome')
     USE_COOKIES_FILE = os.getenv('USE_COOKIES_FILE', 'false').lower() == 'true'
+    COOKIES_FILE = os.getenv('COOKIES_FILE', 'cookies.txt')
+
+    # Channel monitoring
+    CHANNELS_FILE = os.getenv('CHANNELS_FILE', 'channels.txt')
 
     # Paths
     BASE_DIR = Path(__file__).parent.parent

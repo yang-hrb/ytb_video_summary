@@ -149,6 +149,37 @@ You can use either OpenRouter or Perplexity AI for generating summaries. Set `SU
 ./batch-run.sh
 ```
 
+### 4. Daily Channel Cron Job (Latest Uploads)
+
+Use a channel list file and cron to process the latest upload within the last 24 hours for each channel.
+
+1. Copy the channel list example and add your channels:
+
+```bash
+cp channels.txt.example channels.txt
+```
+
+2. Set the channel list file in `.env`:
+
+```
+CHANNELS_FILE=channels.txt
+```
+
+3. Run the cron script manually to verify:
+
+```bash
+./cron-channel-run.sh
+```
+
+4. Add the crontab entry (2 PM CST daily):
+
+```bash
+CRON_TZ=America/Chicago
+0 14 * * * /bin/bash /path/to/ytb_video_summary/cron-channel-run.sh >> /path/to/ytb_video_summary/logs/cron.log 2>&1
+```
+
+> The cron script reads `.env`, processes the latest uploads in the last 24 hours, and uploads reports to GitHub when `GITHUB_TOKEN` and `GITHUB_REPO` are configured.
+
 **Features of GitHub Upload Scripts:**
 - 🎯 **Automated workflow**: Process content and upload in one command
 - 🎨 **Interactive prompts**: Guides you through all options

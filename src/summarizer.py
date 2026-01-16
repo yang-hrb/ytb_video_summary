@@ -5,7 +5,7 @@ import logging
 import json
 
 from config import config
-from .utils import create_summary_header, format_duration
+from .utils import create_summary_header, format_duration, format_upload_time
 
 logger = logging.getLogger(__name__)
 
@@ -304,7 +304,17 @@ Please output in the following format:
         if video_info:
             title = video_info.get('title', 'Unknown')
             duration = format_duration(video_info.get('duration', 0))
-            content = create_summary_header(title, duration)
+            uploader = video_info.get('uploader')
+            upload_time = format_upload_time(
+                video_info.get('upload_date'),
+                video_info.get('timestamp')
+            )
+            content = create_summary_header(
+                title,
+                duration,
+                uploader=uploader,
+                upload_time=upload_time
+            )
 
         # Add summary content
         content += summary
