@@ -14,21 +14,20 @@
 ```
 agent-skills/
   README.md
-  skill-1-youtube-download/
-  skill-2-mp3-to-srt/
-  skill-3-srt-to-summary/
-  skill-4-upload-to-github/
+  youtube-download/
+  mp3-to-srt/
+  srt-to-summary/
+  upload-to-github/
 ```
 
 每个 skill 目录均包含：
 
-- `metadata.json`：技能元数据、依赖、输入输出约定
-- `prompt.md`：适配 Claude Code / Open Code 的提示词（含环境设立）
+- `SKILL.md`：技能说明（含 metadata 与执行指引）
 - `scripts/`：可执行脚本（尽量使用 Python）
 
 ## 🧩 建议执行顺序
 
-1. `skill-1-youtube-download`
-2. `skill-2-mp3-to-srt`
-3. `skill-3-srt-to-summary`
-4. `skill-4-upload-to-github`
+1. `youtube-download`
+2. `mp3-to-srt`
+3. `srt-to-summary`
+4. `upload-to-github`
