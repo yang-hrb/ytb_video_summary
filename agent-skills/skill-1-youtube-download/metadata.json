@@ -1,0 +1,25 @@
+{
+  "name": "skill-1-youtube-download",
+  "version": "0.1.0",
+  "description": "下载 YouTube 视频音频（MP3）或字幕（SRT），并返回视频元信息。",
+  "compatible_runtimes": ["claude-code", "open-code"],
+  "entrypoint": "scripts/download_youtube.py",
+  "inputs": {
+    "url": "YouTube 视频 URL",
+    "cookies": "可选，cookies.txt 文件路径（会员视频）",
+    "lang": "字幕语言（默认 zh）",
+    "output_dir": "输出目录（默认 output/downloads）"
+  },
+  "outputs": {
+    "audio_path": "下载的 MP3 路径（如无字幕）",
+    "subtitle_path": "下载的 SRT 路径（如有字幕）",
+    "video_info": "标题、作者、上传时间、播放数等元信息"
+  },
+  "requirements": {
+    "python": ">=3.9",
+    "system": ["ffmpeg"],
+    "python_packages": ["yt-dlp", "python-dotenv"],
+    "env": []
+  },
+  "tags": ["youtube", "download", "mp3", "srt"]
+}

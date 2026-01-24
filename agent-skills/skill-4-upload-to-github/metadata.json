@@ -1,0 +1,22 @@
+{
+  "name": "skill-4-upload-to-github",
+  "version": "0.1.0",
+  "description": "将本地 Markdown 文件上传到指定 GitHub 仓库目录。",
+  "compatible_runtimes": ["claude-code", "open-code"],
+  "entrypoint": "scripts/upload_markdown.py",
+  "inputs": {
+    "local_dir": "本地包含 .md 文件的目录",
+    "remote_folder": "GitHub 目标目录（默认 reports）",
+    "skip_existing": "是否跳过已存在文件"
+  },
+  "outputs": {
+    "upload_summary": "上传统计结果"
+  },
+  "requirements": {
+    "python": ">=3.9",
+    "system": [],
+    "python_packages": ["python-dotenv", "requests", "colorama"],
+    "env": ["GITHUB_TOKEN", "GITHUB_REPO", "GITHUB_BRANCH"]
+  },
+  "tags": ["github", "upload", "markdown"]
+}

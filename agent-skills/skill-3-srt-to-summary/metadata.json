@@ -1,0 +1,25 @@
+{
+  "name": "skill-3-srt-to-summary",
+  "version": "0.1.0",
+  "description": "读取 SRT 字幕并调用 OpenRouter 免费模型生成 Markdown 总结，包含视频元信息与 Reference。",
+  "compatible_runtimes": ["claude-code", "open-code"],
+  "entrypoint": "scripts/summarize_srt.py",
+  "inputs": {
+    "srt_path": "SRT 文件路径",
+    "youtube_url": "可选，YouTube URL，用于抓取作者/标题/上传时间/播放数/点赞数",
+    "language": "总结语言（zh/en）",
+    "model": "OpenRouter 模型名（默认免费模型）",
+    "output_dir": "输出目录（默认 output/summaries）"
+  },
+  "outputs": {
+    "summary_path": "生成的 Markdown 总结文件",
+    "reference": "写入总结文件的 Reference 信息"
+  },
+  "requirements": {
+    "python": ">=3.9",
+    "system": [],
+    "python_packages": ["requests", "yt-dlp", "python-dotenv"],
+    "env": ["OPENROUTER_API_KEY", "OPENROUTER_MODEL"]
+  },
+  "tags": ["summary", "openrouter", "srt", "markdown"]
+}
