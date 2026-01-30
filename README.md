@@ -178,8 +178,11 @@ python src/main.py -video "URL" --style brief
 # Keep audio files
 python src/main.py -video "URL" --keep-audio
 
-# Use cookies (for membership videos)
-python src/main.py -video "URL" --cookies cookies.txt
+# Use local browser cookies (default, most reliable)
+python src/main.py -video "URL" --cookies-from-browser
+
+# Fallback to cookies.txt (less reliable across machines)
+python src/main.py -video "URL" --no-cookies-from-browser --cookies cookies.txt
 
 # Upload to GitHub (automatically during processing)
 python src/main.py -video "URL" --upload
@@ -213,18 +216,27 @@ Input Arguments (mutually exclusive):
   --batch FILE                    Batch input file (one URL or path per line)
 
 Optional Arguments:
-  --cookies FILE                  Path to cookies.txt file (for membership videos)
+  --cookies FILE                  Path to cookies.txt file (fallback only)
+  --cookies-from-browser / --no-cookies-from-browser
+                                 Use local browser cookies (default: enabled)
+  --browser {chrome,edge,firefox} Browser profile to read cookies from (default: chrome)
   --keep-audio                   Keep downloaded audio files (YouTube only)
   --style {brief|detailed}       Summary style (default: detailed)
   --upload                       Upload report files to GitHub repository
 ```
 
-### Processing Membership Videos
+### Processing Membership Videos (Recommended)
 
-1. Install browser extension [Get cookies.txt](https://chrome.google.com/webstore/detail/get-cookiestxt/bgaddhkoddajcdgocldbbfleckgcbcid)
-2. Log into YouTube
-3. Export cookies as `cookies.txt`
-4. Use `--cookies cookies.txt` parameter
+1. Open Chrome on the same machine and log into YouTube.
+2. Run with browser cookies (default):
+   ```bash
+   python src/main.py -video "URL" --cookies-from-browser
+   ```
+3. If browser cookies are unavailable, you can fall back to `cookies.txt`:
+   ```bash
+   python src/main.py -video "URL" --no-cookies-from-browser --cookies cookies.txt
+   ```
+> ⚠️ `cookies.txt` exports are often unreliable across machines and can trigger 403 errors.
 
 ### Python API Usage
 
@@ -235,6 +247,8 @@ from pathlib import Path
 # Process single video
 result = process_video(
     url="https://youtube.com/watch?v=xxxxx",
+    cookies_from_browser=True,
+    browser="chrome",
     keep_audio=False,
     summary_style="detailed"
 )
@@ -307,7 +321,7 @@ python src/main.py --batch input.txt --style brief --upload
 1. Create input.txt with your URLs and paths
 2. Run: ./batch-run.sh
 3. Choose summary style (brief/detailed)
-4. Choose options (cookies, keep-audio, upload)
+4. Choose options (browser cookies, keep-audio, upload)
 5. Processing starts... (shows progress for each item)
 6. Done! Summary shows successful and failed items
 ```
@@ -331,7 +345,7 @@ Process an entire YouTube playlist and automatically upload reports to GitHub:
 **Features:**
 - ✅ Prompts for playlist URL
 - ✅ Choose summary style (brief/detailed)
-- ✅ Optional cookies support for membership videos
+- ✅ Optional browser cookies support for membership videos
 - ✅ Processes all videos in playlist
 - ✅ Asks for confirmation before GitHub upload
 - ✅ Shows detailed progress and results
@@ -340,7 +354,7 @@ Process an entire YouTube playlist and automatically upload reports to GitHub:
 ```
 1. Enter playlist URL
 2. Choose summary style (brief/detailed)
-3. Use cookies? (y/N)
+3. Use browser cookies? (y/N)
 4. Processing playlist... (shows progress for each video)
 5. Upload reports to GitHub? (Y/n)
 6. Done! Reports uploaded to GitHub
@@ -621,6 +635,7 @@ The application features a comprehensive logging system:
 
 ### Security & Compliance
 - ⚠️ **DO NOT** commit `cookies.txt` to Git
+- ⚠️ **Prefer browser cookies** on the same machine; exported cookies often trigger 403s
 - ⚠️ **DO NOT** share or redistribute membership content
 - ⚠️ **USE ONLY** for personal learning
 - ⚠️ Follow YouTube Terms of Service
@@ -637,9 +652,10 @@ The application features a comprehensive logging system:
 # Update yt-dlp
 pip install -U yt-dlp
 ```
+Then ensure you're logged into YouTube in Chrome and run with `--cookies-from-browser`.
 
 ### Expired Cookies
-Re-export browser cookies
+Log back into YouTube in Chrome and rerun with `--cookies-from-browser`
 
 ### Slow Whisper Transcription
 - Use smaller model (`tiny` or `base`)

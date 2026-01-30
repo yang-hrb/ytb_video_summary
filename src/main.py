@@ -63,6 +63,8 @@ def log_success(message: str):
 def process_video(
     url: str,
     cookies_file: Optional[str] = None,
+    cookies_from_browser: bool = True,
+    browser: str = "chrome",
     keep_audio: bool = False,
     summary_style: str = "detailed",
     upload_to_github_repo: bool = False
@@ -73,6 +75,8 @@ def process_video(
     Args:
         url: YouTube video URL
         cookies_file: Path to cookies.txt file
+        cookies_from_browser: Prefer browser session cookies when available
+        browser: Browser name for cookiesfrombrowser (default: chrome)
         keep_audio: Whether to keep downloaded audio file
         summary_style: Summary style (brief/detailed)
         upload_to_github_repo: Whether to upload report to GitHub
@@ -88,7 +92,12 @@ def process_video(
     try:
         # Step 1: Download video info and subtitles/audio
         log_step("1/4", "Fetching video information...")
-        result = process_youtube_video(url, cookies_file)
+        result = process_youtube_video(
+            url,
+            cookies_file=cookies_file,
+            cookies_from_browser=cookies_from_browser,
+            browser=browser,
+        )
 
         video_info = result['info']
         video_id = result['video_id']
@@ -182,7 +191,7 @@ def process_video(
 
     except Exception as e:
         log_error(f"Processing failed: {e}")
-        logger.exception("Error processing video")
+        logger.debug("Error processing video", exc_info=True)
 
         # Mark run as failed and log to failure file
         if run_id:
@@ -304,7 +313,7 @@ def process_local_mp3(
 
     except Exception as e:
         log_error(f"Processing failed: {e}")
-        logger.exception("Error processing local MP3")
+        logger.debug("Error processing local MP3", exc_info=True)
 
         # Mark run as failed and log to failure file
         if run_id:
@@ -375,7 +384,12 @@ def process_local_folder(
                 results.append(result)
             except Exception as e:
                 log_error(f"File {idx} processing failed: {e}")
-                logger.exception(f"Failed to process file {idx}: {mp3_file}")
+                logger.debug(
+                    "Failed to process file %s: %s",
+                    idx,
+                    mp3_file,
+                    exc_info=True,
+                )
                 failed_files.append((idx, mp3_file.name, str(e)))
                 # Continue processing next file
                 continue
@@ -397,13 +411,15 @@ def process_local_folder(
 
     except Exception as e:
         log_error(f"Folder processing failed: {e}")
-        logger.exception("Error processing local folder")
+        logger.debug("Error processing local folder", exc_info=True)
         raise
 
 
 def process_playlist(
     playlist_url: str,
     cookies_file: Optional[str] = None,
+    cookies_from_browser: bool = True,
+    browser: str = "chrome",
     keep_audio: bool = False,
     summary_style: str = "detailed",
     upload_to_github_repo: bool = False
@@ -414,6 +430,8 @@ def process_playlist(
     Args:
         playlist_url: YouTube playlist URL
         cookies_file: Path to cookies.txt file
+        cookies_from_browser: Prefer browser session cookies when available
+        browser: Browser name for cookiesfrombrowser (default: chrome)
         keep_audio: Whether to keep downloaded audio files
         summary_style: Summary style (brief/detailed)
         upload_to_github_repo: Whether to upload reports to GitHub after each video
@@ -427,7 +445,12 @@ def process_playlist(
         playlist_id = extract_playlist_id(playlist_url)
         logger.info(f"  Playlist ID: {playlist_id}")
 
-        video_urls = get_playlist_videos(playlist_url, cookies_file)
+        video_urls = get_playlist_videos(
+            playlist_url,
+            cookies_file=cookies_file,
+            cookies_from_browser=cookies_from_browser,
+            browser=browser,
+        )
 
         if not video_urls:
             log_error("No videos found in playlist")
@@ -450,6 +473,8 @@ def process_playlist(
                 result = process_video(
                     video_url,
                     cookies_file=cookies_file,
+                    cookies_from_browser=cookies_from_browser,
+                    browser=browser,
                     keep_audio=keep_audio,
                     summary_style=summary_style,
                     upload_to_github_repo=False  # We'll handle upload here for each iteration
@@ -470,7 +495,12 @@ def process_playlist(
                 results.append(result)
             except Exception as e:
                 log_error(f"Video {idx} processing failed: {e}")
-                logger.exception(f"Failed to process video {idx}: {video_url}")
+                logger.debug(
+                    "Failed to process video %s: %s",
+                    idx,
+                    video_url,
+                    exc_info=True,
+                )
                 failed_videos.append((idx, video_url, str(e)))
                 # Continue processing next video
                 continue
@@ -492,7 +522,7 @@ def process_playlist(
 
     except Exception as e:
         log_error(f"Playlist processing failed: {e}")
-        logger.exception("Error processing playlist")
+        logger.debug("Error processing playlist", exc_info=True)
         raise
 
 
@@ -626,7 +656,7 @@ def process_apple_podcast(
 
     except Exception as e:
         log_error(f"Processing failed: {e}")
-        logger.exception("Error processing podcast episode")
+        logger.debug("Error processing podcast episode", exc_info=True)
 
         # Mark run as failed and log to failure file
         if run_id:
@@ -702,7 +732,12 @@ def process_apple_podcast_show(
                 results.append(result)
             except Exception as e:
                 log_error(f"Episode {idx+1} processing failed: {e}")
-                logger.exception(f"Failed to process episode {idx+1}: {episode_info['title']}")
+                logger.debug(
+                    "Failed to process episode %s: %s",
+                    idx + 1,
+                    episode_info["title"],
+                    exc_info=True,
+                )
                 failed_episodes.append((idx+1, episode_info['title'], str(e)))
                 # Continue processing next episode
                 continue
@@ -724,7 +759,7 @@ def process_apple_podcast_show(
 
     except Exception as e:
         log_error(f"Podcast show processing failed: {e}")
-        logger.exception("Error processing podcast show")
+        logger.debug("Error processing podcast show", exc_info=True)
         raise
 
 
@@ -761,6 +796,8 @@ def detect_input_type(line: str) -> str:
 def process_batch_file(
     batch_file: Path,
     cookies_file: Optional[str] = None,
+    cookies_from_browser: bool = True,
+    browser: str = "chrome",
     keep_audio: bool = False,
     summary_style: str = "detailed",
     upload_to_github_repo: bool = False
@@ -776,6 +813,8 @@ def process_batch_file(
     Args:
         batch_file: Path to batch input file
         cookies_file: Path to cookies.txt file (for YouTube)
+        cookies_from_browser: Prefer browser session cookies when available
+        browser: Browser name for cookiesfrombrowser (default: chrome)
         keep_audio: Whether to keep downloaded audio files (for YouTube)
         summary_style: Summary style (brief/detailed)
         upload_to_github_repo: Whether to upload reports to GitHub
@@ -840,6 +879,8 @@ def process_batch_file(
                     result = process_video(
                         input_line,
                         cookies_file=cookies_file,
+                        cookies_from_browser=cookies_from_browser,
+                        browser=browser,
                         keep_audio=keep_audio,
                         summary_style=summary_style,
                         upload_to_github_repo=upload_to_github_repo
@@ -852,6 +893,8 @@ def process_batch_file(
                     result = process_playlist(
                         input_line,
                         cookies_file=cookies_file,
+                        cookies_from_browser=cookies_from_browser,
+                        browser=browser,
                         keep_audio=keep_audio,
                         summary_style=summary_style,
                         upload_to_github_repo=upload_to_github_repo
@@ -891,7 +934,7 @@ def process_batch_file(
             except Exception as e:
                 error_msg = str(e)
                 log_error(f"Failed to process input: {error_msg}")
-                logger.exception(f"Error processing line {line_num}")
+                logger.debug("Error processing line %s", line_num, exc_info=True)
                 item_result['error'] = error_msg
                 results['failed'] += 1
 
@@ -919,7 +962,7 @@ def process_batch_file(
 
     except Exception as e:
         log_error(f"Batch processing failed: {e}")
-        logger.exception("Error in batch processing")
+        logger.debug("Error in batch processing", exc_info=True)
         return {'success': False, 'error': str(e)}
 
 
@@ -1009,7 +1052,21 @@ Examples:
     parser.add_argument(
         '--cookies',
         type=str,
-        help='Path to cookies.txt file (for membership videos)'
+        help='Path to cookies.txt file (fallback only; browser cookies are preferred)'
+    )
+
+    parser.add_argument(
+        '--cookies-from-browser',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='Use cookies from local browser profile (default: enabled)'
+    )
+
+    parser.add_argument(
+        '--browser',
+        choices=['chrome', 'edge', 'firefox'],
+        default='chrome',
+        help='Browser profile to read cookies from (default: chrome)'
     )
 
     parser.add_argument(
@@ -1059,6 +1116,8 @@ Examples:
             results = process_batch_file(
                 batch_file,
                 cookies_file=args.cookies,
+                cookies_from_browser=args.cookies_from_browser,
+                browser=args.browser,
                 keep_audio=args.keep_audio,
                 summary_style=args.style,
                 upload_to_github_repo=args.upload
@@ -1108,6 +1167,8 @@ Examples:
             results = process_playlist(
                 args.list,
                 cookies_file=args.cookies,
+                cookies_from_browser=args.cookies_from_browser,
+                browser=args.browser,
                 keep_audio=args.keep_audio,
                 summary_style=args.style,
                 upload_to_github_repo=args.upload
@@ -1119,6 +1180,8 @@ Examples:
             result = process_video(
                 args.video,
                 cookies_file=args.cookies,
+                cookies_from_browser=args.cookies_from_browser,
+                browser=args.browser,
                 keep_audio=args.keep_audio,
                 summary_style=args.style,
                 upload_to_github_repo=args.upload
@@ -1139,6 +1202,8 @@ Examples:
                 results = process_playlist(
                     args.url,
                     cookies_file=args.cookies,
+                    cookies_from_browser=args.cookies_from_browser,
+                    browser=args.browser,
                     keep_audio=args.keep_audio,
                     summary_style=args.style,
                     upload_to_github_repo=args.upload
@@ -1148,6 +1213,8 @@ Examples:
                 result = process_video(
                     args.url,
                     cookies_file=args.cookies,
+                    cookies_from_browser=args.cookies_from_browser,
+                    browser=args.browser,
                     keep_audio=args.keep_audio,
                     summary_style=args.style,
                     upload_to_github_repo=args.upload
