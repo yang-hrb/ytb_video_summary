@@ -15,6 +15,7 @@ import sys
 import argparse
 from pathlib import Path
 from typing import List
+from datetime import datetime
 
 from colorama import init, Fore, Style
 
@@ -104,11 +105,15 @@ def upload_files(files: List[Path], remote_folder: str = "reports", skip_existin
         'errors': []
     }
 
+    # Get current date string (YYYYMMDD format)
+    date_str = datetime.now().strftime("%Y%m%d")
+
     for idx, file_path in enumerate(files, 1):
         logger.info(f"[{idx}/{len(files)}] Uploading: {file_path.name}")
 
         try:
-            remote_path = f"{remote_folder}/{file_path.name}"
+            # Include date folder in the remote path
+            remote_path = f"{remote_folder}/{date_str}/{file_path.name}"
             commit_message = f"Upload: {file_path.name}"
 
             url = handler.upload_file(
