@@ -227,3 +227,4 @@ youtube_summarizer.log
 .DS_Store
 logs/run_track.db
 input.txt
+logs/input_old_20260130.txt
