@@ -3,7 +3,16 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, TypeVar
 
 import yt_dlp
-from yt_dlp.utils import CookieLoadError, DownloadError
+from yt_dlp.utils import DownloadError
+
+try:
+    from yt_dlp.cookies import CookieLoadError
+except ImportError:  # pragma: no cover - fallback for older yt-dlp versions
+    try:
+        from yt_dlp.utils import CookieLoadError
+    except ImportError:  # pragma: no cover - last-resort fallback
+        class CookieLoadError(Exception):
+            pass
 
 from config import config
 from .utils import extract_video_id, find_ffmpeg_location
