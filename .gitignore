@@ -5,6 +5,7 @@
 temp/
 logs/  # includes run_track.db and failure logs
 failure*.txt
+bin/
 
 
 # Byte-compiled / optimized / DLL files
