@@ -3,7 +3,6 @@ import base64
 from pathlib import Path
 from typing import Optional
 import logging
-from datetime import datetime
 
 from config import config
 
@@ -137,10 +136,7 @@ def upload_to_github(file_path: Path, remote_folder: str = "reports") -> Optiona
 
     try:
         handler = GitHubHandler()
-        # Get current date string (YYYYMMDD format)
-        date_str = datetime.now().strftime("%Y%m%d")
-        # Include date folder in the remote path
-        remote_path = f"{remote_folder}/{date_str}/{file_path.name}"
+        remote_path = f"{remote_folder}/{file_path.name}"
         url = handler.upload_file(file_path, remote_path)
         return url
     except Exception as e:

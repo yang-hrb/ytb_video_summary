@@ -682,7 +682,7 @@ Ensure FFmpeg is installed and added to system PATH
 - [x] Centralized logging system with timestamped log files
 - [x] GitHub repository integration for automated backup
 - [x] Individual file upload to prevent batch failures
-- [x] Web UI interface
+- [ ] Web UI interface
 - [ ] Support for more video platforms (Bilibili, Vimeo)
 - [ ] Multi-language translation features
 - [ ] Export to PDF/Word formats
