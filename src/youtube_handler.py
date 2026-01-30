@@ -236,14 +236,26 @@ class YouTubeHandler:
         Returns:
             Dictionary containing video information
         """
+        # ydl_opts = build_ydl_opts(
+        #     cookies_file=self.cookies_file,
+        #     cookies_from_browser=self.cookies_from_browser,
+        #     browser=self.browser,
+        #     overrides={
+        #         "extract_flat": False,
+        #     },
+        # )
+
         ydl_opts = build_ydl_opts(
             cookies_file=self.cookies_file,
             cookies_from_browser=self.cookies_from_browser,
             browser=self.browser,
             overrides={
                 "extract_flat": False,
+                "skip_download": True,
+                "ignore_no_formats_error": True,
             },
         )
+
 
         try:
             info = _run_ydl_with_cookie_fallback(
