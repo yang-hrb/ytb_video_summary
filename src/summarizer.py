@@ -1,8 +1,11 @@
-import requests
-from pathlib import Path
-from typing import Optional, Dict
-import logging
 import json
+import logging
+import re
+import time
+from pathlib import Path
+from typing import Dict, Optional
+
+import requests
 
 from config import config
 from .utils import create_summary_header, format_duration
@@ -14,51 +17,56 @@ class Summarizer:
     """Use OpenRouter or Perplexity API for text summarization"""
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None, api_type: Optional[str] = None):
-        """
-        Initialize summarizer
-
-        Args:
-            api_key: API Key (OpenRouter or Perplexity)
-            model: Model name to use (defaults to model from config based on API type)
-            api_type: API type to use ('OPENROUTER' or 'PERPLEXITY', defaults to config.SUMMARY_API)
-        """
         self.api_type = (api_type or config.SUMMARY_API).upper()
+        self.openrouter_key = api_key or config.OPENROUTER_API_KEY
+        self.perplexity_key = config.PERPLEXITY_API_KEY
+        self.model = model or config.OPENROUTER_MODEL
 
-        if self.api_type == 'OPENROUTER':
-            self.api_key = api_key or config.OPENROUTER_API_KEY
-            self.model = model or config.OPENROUTER_MODEL
-            self.api_url = "https://openrouter.ai/api/v1/chat/completions"
-            if not self.api_key:
-                raise ValueError("OpenRouter API key is required")
-        elif self.api_type == 'PERPLEXITY':
-            self.api_key = api_key or config.PERPLEXITY_API_KEY
-            self.model = model or config.PERPLEXITY_MODEL
-            self.api_url = "https://api.perplexity.ai"
-            if not self.api_key:
-                raise ValueError("Perplexity API key is required")
-            # Import OpenAI client for Perplexity
+        self.openrouter_models = [
+            config.MODEL_PRIORITY_1,
+            config.MODEL_PRIORITY_2,
+            config.MODEL_PRIORITY_3,
+        ]
+
+        if not any(self.openrouter_models):
+            self.openrouter_models = [self.model]
+
+        self.openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.perplexity_url = "https://api.perplexity.ai"
+
+        self.perplexity_model = config.MODEL_FALLBACK or config.PERPLEXITY_MODEL
+        self.client = None
+
+        if self.perplexity_key:
             try:
                 from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key, base_url=self.api_url)
+                self.client = OpenAI(api_key=self.perplexity_key, base_url=self.perplexity_url)
             except ImportError:
-                raise ImportError("openai package is required for Perplexity API. Install it with: pip install openai")
-        else:
-            raise ValueError(f"Invalid API type: {self.api_type}. Must be 'OPENROUTER' or 'PERPLEXITY'")
+                logger.warning("openai package missing, Perplexity fallback unavailable")
+
+    @staticmethod
+    def clean_srt_content(content: str) -> str:
+        """Strip sequence numbers, timecodes and blank lines from SRT content."""
+        lines = content.splitlines()
+        cleaned = []
+        timestamp_pattern = re.compile(r"^\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{3}$")
+
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.isdigit():
+                continue
+            if timestamp_pattern.match(line) or "-->" in line:
+                continue
+            cleaned.append(line)
+
+        return " ".join(cleaned)
 
     def create_prompt(self, transcript: str, style: str = "detailed", language: str = "en") -> str:
-        """
-        Create summary prompt
+        transcript = self.clean_srt_content(transcript)
 
-        Args:
-            transcript: Video transcript text
-            style: Summary style (brief/detailed)
-            language: Language for summary output (zh/en)
-
-        Returns:
-            Formatted prompt
-        """
         if language == "zh":
-            # Chinese prompts
             if style == "brief":
                 prompt = f"""请简明扼要地总结以下视频内容：
 
@@ -82,7 +90,7 @@ class Summarizer:
 ## 💡 核心见解
 [深度洞察]
 """
-            else:  # detailed
+            else:
                 prompt = f"""请详细总结以下视频内容：
 
 1. 用3-5句话概括核心内容
@@ -116,7 +124,6 @@ class Summarizer:
 [其他重要信息]
 """
         else:
-            # English prompts
             if style == "brief":
                 prompt = f"""Please summarize the following video content concisely:
 
@@ -140,7 +147,7 @@ Please output in the following format:
 ## 💡 Core Insights
 [Deep insights]
 """
-            else:  # detailed
+            else:
                 prompt = f"""Please summarize the following video content in detail:
 
 1. Summarize the core content in 3-5 sentences
@@ -176,140 +183,114 @@ Please output in the following format:
 
         return prompt
 
-    def summarize(self, transcript: str, style: str = "detailed",
-                  language: str = "en", max_tokens: int = 2000) -> str:
-        """
-        Summarize text using AI
-
-        Args:
-            transcript: Transcript text
-            style: Summary style
-            language: Language for summary output (zh/en)
-            max_tokens: Maximum token count
-
-        Returns:
-            Summary text
-        """
+    def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 2000) -> str:
         prompt = self.create_prompt(transcript, style, language)
 
-        if self.api_type == 'OPENROUTER':
-            return self._summarize_openrouter(prompt, max_tokens)
-        elif self.api_type == 'PERPLEXITY':
-            return self._summarize_perplexity(prompt, max_tokens)
-        else:
-            raise ValueError(f"Unsupported API type: {self.api_type}")
+        if self.api_type == 'PERPLEXITY':
+            return self._summarize_perplexity(prompt, max_tokens, self.perplexity_model)
+        return self._summarize_with_waterfall(prompt, max_tokens)
 
-    def _summarize_openrouter(self, prompt: str, max_tokens: int) -> str:
-        """
-        Summarize using OpenRouter API
+    def _is_retryable_http_error(self, status_code: Optional[int]) -> bool:
+        if status_code is None:
+            return True
+        return status_code == 429 or 500 <= status_code < 600
 
-        Args:
-            prompt: Formatted prompt
-            max_tokens: Maximum token count
-
-        Returns:
-            Summary text
-        """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
+    def _build_openrouter_headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.openrouter_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/ytb_video_summary",
             "X-Title": "YouTube Video Summarizer"
         }
 
+    def _summarize_with_waterfall(self, prompt: str, max_tokens: int) -> str:
+        if self.openrouter_key:
+            for model_name in self.openrouter_models:
+                if not model_name:
+                    continue
+
+                for attempt in range(1, 4):
+                    try:
+                        return self._summarize_openrouter(prompt, max_tokens, model_name)
+                    except requests.exceptions.RequestException as e:
+                        status_code = getattr(getattr(e, "response", None), "status_code", None)
+                        retryable = self._is_retryable_http_error(status_code)
+                        if retryable and attempt < 3:
+                            backoff_seconds = 2 ** attempt
+                            logger.warning(
+                                "OpenRouter failed for model %s (attempt %s/3, status=%s). Retrying in %ss.",
+                                model_name,
+                                attempt,
+                                status_code,
+                                backoff_seconds,
+                            )
+                            time.sleep(backoff_seconds)
+                            continue
+
+                        if retryable:
+                            logger.warning("OpenRouter model %s exhausted retries, switching to next model.", model_name)
+                            break
+                        raise
+                    except Exception:
+                        logger.warning("OpenRouter model %s parsing failed, switching model.", model_name)
+                        break
+
+        logger.warning("All OpenRouter free models failed, trying Perplexity fallback")
+        if self.perplexity_key and self.client:
+            return self._summarize_perplexity(prompt, max_tokens, self.perplexity_model)
+
+        raise RuntimeError("All OpenRouter models failed and Perplexity fallback is unavailable")
+
+    def _summarize_openrouter(self, prompt: str, max_tokens: int, model_name: str) -> str:
         payload = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
-            "temperature": 0.7
+            "temperature": 0.7,
         }
 
-        try:
-            logger.info(f"Sending request to OpenRouter API (model: {self.model})...")
-            response = requests.post(
-                self.api_url,
-                headers=headers,
-                json=payload,
-                timeout=60
-            )
-            response.raise_for_status()
+        logger.info("Sending request to OpenRouter API (model: %s)...", model_name)
+        response = requests.post(
+            self.openrouter_url,
+            headers=self._build_openrouter_headers(),
+            json=payload,
+            timeout=60,
+        )
+        response.raise_for_status()
 
-            result = response.json()
-            summary = result['choices'][0]['message']['content']
+        result = response.json()
+        summary = result['choices'][0]['message']['content']
+        logger.info("Summary generated successfully")
+        return summary.strip()
 
-            logger.info("Summary generated successfully")
-            return summary.strip()
+    def _summarize_perplexity(self, prompt: str, max_tokens: int, model_name: str) -> str:
+        if not self.client:
+            raise RuntimeError("Perplexity client is unavailable")
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"OpenRouter API request failed: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"Response: {e.response.text}")
-            raise
-        except (KeyError, IndexError) as e:
-            logger.error(f"Failed to parse OpenRouter API response: {e}")
-            raise
+        logger.info("Sending request to Perplexity API (model: %s)...", model_name)
+        response = self.client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=0.7,
+        )
 
-    def _summarize_perplexity(self, prompt: str, max_tokens: int) -> str:
-        """
-        Summarize using Perplexity API
-
-        Args:
-            prompt: Formatted prompt
-            max_tokens: Maximum token count
-
-        Returns:
-            Summary text
-        """
-        try:
-            logger.info(f"Sending request to Perplexity API (model: {self.model})...")
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=0.7
-            )
-
-            summary = response.choices[0].message.content
-
-            logger.info("Summary generated successfully")
-            return summary.strip()
-
-        except Exception as e:
-            logger.error(f"Perplexity API request failed: {e}")
-            raise
+        summary = response.choices[0].message.content
+        logger.info("Summary generated successfully")
+        return summary.strip()
 
     def save_summary(self, summary: str, output_path: Path,
                      video_info: Optional[Dict] = None, video_id: Optional[str] = None,
                      video_url: Optional[str] = None):
-        """
-        Save summary to file
-
-        Args:
-            summary: Summary text
-            output_path: Output file path
-            video_info: Video information (for generating header)
-            video_id: Video ID (for adding reference)
-            video_url: Video URL (for adding reference)
-        """
         content = ""
 
-        # Add header information
         if video_info:
             title = video_info.get('title', 'Unknown')
             duration = format_duration(video_info.get('duration', 0))
             content = create_summary_header(title, duration)
 
-        # Add summary content
         content += summary
 
-        # Add reference information
         if video_id or video_url:
             content += "\n\n---\n\n## 📎 Reference Information\n\n"
             if video_id:
@@ -317,7 +298,6 @@ Please output in the following format:
             if video_url:
                 content += f"**Video Link**: {video_url}\n"
 
-        # Save file
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
@@ -329,37 +309,18 @@ def summarize_transcript(transcript: str, video_id: str,
                         style: str = "detailed",
                         language: str = "en",
                         video_url: Optional[str] = None) -> Dict:
-    """
-    Summarize transcript text (convenience function)
-
-    Args:
-        transcript: Transcript text
-        video_id: Video ID
-        video_info: Video information
-        style: Summary style
-        language: Language for summary output (zh/en)
-        video_url: Video URL
-
-    Returns:
-        Dictionary containing file paths and Notion URL
-    """
     from .utils import create_report_filename
 
     summarizer = Summarizer()
     summary = summarizer.summarize(transcript, style=style, language=language)
 
-    # Save to summaries directory (original functionality)
     summary_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
     summarizer.save_summary(summary, summary_path, video_info)
 
-    # Save to reports directory (new feature with timestamp, uploader, and content title)
     report_path = None
 
     if video_info and video_info.get('title'):
-        # Generate report filename
         uploader = video_info.get('uploader', '')
-
-        # Check if it's a local MP3 file
         is_local_mp3 = (uploader == 'Local Audio')
 
         report_filename = create_report_filename(
@@ -370,7 +331,6 @@ def summarize_transcript(transcript: str, video_id: str,
         )
         report_path = config.REPORT_DIR / report_filename
 
-        # Save to local file
         summarizer.save_summary(summary, report_path, video_info, video_id, video_url)
         logger.info(f"Report saved: {report_path}")
 

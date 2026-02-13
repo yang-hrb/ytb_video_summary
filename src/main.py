@@ -104,7 +104,7 @@ def process_video(
 
         # Start tracking this run
         run_id = tracker.start_run('youtube', url, video_id)
-        tracker.update_status(run_id, 'working')
+        tracker.update_status(run_id, 'PENDING', stage='download')
 
         logger.info(f"  Title: {video_info['title']}")
         logger.info(f"  Duration: {video_info['duration']}s")
@@ -121,6 +121,7 @@ def process_video(
             logger.info(f"  File size: {get_file_size_mb(audio_path):.2f} MB")
 
             transcript, whisper_language = transcribe_video_audio(audio_path, video_id, save_srt=True)
+            tracker.update_status(run_id, 'AUDIO_DOWNLOADED', stage='transcribe')
 
             # Clean up audio file
             if not keep_audio and not config.KEEP_AUDIO:
@@ -131,23 +132,29 @@ def process_video(
             subtitle_path = result['subtitle_path']
             logger.info(f"  Subtitle file: {subtitle_path}")
             transcript, whisper_language = read_subtitle_file(subtitle_path)
+            tracker.update_status(run_id, 'TRANSCRIPT_GENERATED', stage='transcribe')
 
         logger.info(f"  Transcript length: {len(transcript)} characters")
         logger.info(f"  Detected language: {whisper_language}")
+        tracker.update_status(run_id, 'TRANSCRIPT_GENERATED', stage='transcribe')
 
         # Step 3: Generate AI summary
         log_step("3/4", "Generating AI summary...")
         logger.info(f"  Using style: {summary_style}")
         logger.info(f"  Summary language: {detected_language}")
 
-        summary_result = summarize_transcript(
-            transcript,
-            video_id,
-            video_info,
-            style=summary_style,
-            language=detected_language,
-            video_url=url
-        )
+        try:
+            summary_result = summarize_transcript(
+                transcript,
+                video_id,
+                video_info,
+                style=summary_style,
+                language=detected_language,
+                video_url=url
+            )
+        except Exception as e:
+            tracker.update_status(run_id, 'SUMMARY_FAILED', str(e), stage='summarize')
+            raise
 
         # Step 4: Output results
         log_step("4/4", "Processing complete!")
@@ -177,7 +184,7 @@ def process_video(
 
         # Mark run as done
         if run_id:
-            tracker.update_status(run_id, 'done')
+            tracker.update_status(run_id, 'COMPLETED', error_message=None, stage='done')
 
         return {
             'video_id': video_id,
@@ -195,7 +202,7 @@ def process_video(
 
         # Mark run as failed and log to failure file
         if run_id:
-            tracker.update_status(run_id, 'failed', str(e))
+            tracker.update_status(run_id, 'SUMMARY_FAILED', str(e), stage='summarize')
         if video_id:
             log_failure('youtube', video_id, url, str(e))
 
@@ -227,8 +234,8 @@ def process_local_mp3(
         file_name = mp3_path.stem  # Filename without extension
 
         # Start tracking this run
-        run_id = tracker.start_run('local', str(mp3_path), mp3_path.name)
-        tracker.update_status(run_id, 'working')
+        run_id = tracker.start_run('local', str(mp3_path), file_name)
+        tracker.update_status(run_id, 'AUDIO_DOWNLOADED', stage='transcribe')
 
         logger.info(f"  File: {mp3_path.name}")
         logger.info(f"  Size: {get_file_size_mb(mp3_path):.2f} MB")
@@ -249,6 +256,7 @@ def process_local_mp3(
 
         logger.info(f"  Transcript length: {len(transcript)} characters")
         logger.info(f"  Detected language: {whisper_language}")
+        tracker.update_status(run_id, 'TRANSCRIPT_GENERATED', stage='transcribe')
 
         # Step 2: Generate AI summary
         log_step("2/3", "Generating AI summary...")
@@ -263,14 +271,18 @@ def process_local_mp3(
             'duration': int(result.get('segments', [{}])[-1].get('end', 0)) if result.get('segments') else 0
         }
 
-        summary_result = summarize_transcript(
-            transcript,
-            file_name,
-            video_info,
-            style=summary_style,
-            language=summary_language,
-            video_url=None
-        )
+        try:
+            summary_result = summarize_transcript(
+                transcript,
+                file_name,
+                video_info,
+                style=summary_style,
+                language=summary_language,
+                video_url=None
+            )
+        except Exception as e:
+            tracker.update_status(run_id, 'SUMMARY_FAILED', str(e), stage='summarize')
+            raise
 
         # Step 3: Output results
         log_step("3/3", "Processing complete!")
@@ -299,7 +311,7 @@ def process_local_mp3(
 
         # Mark run as done
         if run_id:
-            tracker.update_status(run_id, 'done')
+            tracker.update_status(run_id, 'COMPLETED', error_message=None, stage='done')
 
         return {
             'file_name': file_name,
@@ -317,7 +329,7 @@ def process_local_mp3(
 
         # Mark run as failed and log to failure file
         if run_id:
-            tracker.update_status(run_id, 'failed', str(e))
+            tracker.update_status(run_id, 'SUMMARY_FAILED', str(e), stage='summarize')
         if file_name:
             log_failure('local', mp3_path.name, str(mp3_path), str(e))
 
@@ -561,7 +573,7 @@ def process_apple_podcast(
 
         # Start tracking this run
         run_id = tracker.start_run('podcast', url, identifier)
-        tracker.update_status(run_id, 'working')
+        tracker.update_status(run_id, 'PENDING', stage='download')
 
         logger.info(f"  Podcast: {podcast_info['title']}")
         logger.info(f"  Episode: {episode_info['title']}")
@@ -591,6 +603,7 @@ def process_apple_podcast(
 
         logger.info(f"  Transcript length: {len(transcript)} characters")
         logger.info(f"  Detected language: {whisper_language}")
+        tracker.update_status(run_id, 'TRANSCRIPT_GENERATED', stage='transcribe')
 
         # Step 3: Generate AI summary
         log_step("3/3", "Generating AI summary...")
@@ -641,7 +654,7 @@ def process_apple_podcast(
 
         # Mark run as done
         if run_id:
-            tracker.update_status(run_id, 'done')
+            tracker.update_status(run_id, 'COMPLETED', error_message=None, stage='done')
 
         return {
             'identifier': identifier,
@@ -660,7 +673,7 @@ def process_apple_podcast(
 
         # Mark run as failed and log to failure file
         if run_id:
-            tracker.update_status(run_id, 'failed', str(e))
+            tracker.update_status(run_id, 'SUMMARY_FAILED', str(e), stage='summarize')
         if identifier:
             log_failure('podcast', identifier, url, str(e))
 
@@ -966,6 +979,49 @@ def process_batch_file(
         return {'success': False, 'error': str(e)}
 
 
+
+def process_resume_only(summary_style: str = "detailed") -> dict:
+    """Resume summarization for runs stuck after transcript generation."""
+    tracker = get_tracker()
+    resumable_runs = tracker.get_resumable_runs()
+
+    results = {"total": len(resumable_runs), "processed": 0, "failed": 0}
+
+    if not resumable_runs:
+        logger.info("No resumable runs found.")
+        return results
+
+    for run in resumable_runs:
+        run_id = run['id']
+        identifier = run['identifier']
+        srt_path = config.TRANSCRIPT_DIR / f"{identifier}_transcript.srt"
+
+        if not srt_path.exists():
+            logger.warning("Transcript not found for %s: %s", identifier, srt_path)
+            tracker.update_status(run_id, 'SUMMARY_FAILED', f'Missing transcript: {srt_path}', stage='summarize')
+            results['failed'] += 1
+            continue
+
+        try:
+            transcript, detected_language = read_subtitle_file(srt_path)
+            summarize_transcript(
+                transcript,
+                identifier,
+                video_info=None,
+                style=summary_style,
+                language=detected_language,
+                video_url=run['url_or_path'] if str(run.get('url_or_path', '')).startswith('http') else None,
+            )
+            tracker.update_status(run_id, 'COMPLETED', error_message=None, stage='done')
+            results['processed'] += 1
+            logger.info("Resumed summary completed for %s", identifier)
+        except Exception as e:
+            tracker.update_status(run_id, 'SUMMARY_FAILED', str(e), stage='summarize')
+            results['failed'] += 1
+            logger.error("Resume failed for %s: %s", identifier, e)
+
+    return results
+
 def main():
     """Main function - CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -1083,6 +1139,12 @@ Examples:
     )
 
     parser.add_argument(
+        '--resume-only',
+        action='store_true',
+        help='Resume summaries for runs in TRANSCRIPT_GENERATED or SUMMARY_FAILED status'
+    )
+
+    parser.add_argument(
         '--upload',
         action='store_true',
         help='Upload report files to GitHub repository'
@@ -1103,7 +1165,11 @@ Examples:
 
     # Determine processing mode
     try:
-        if args.batch:
+        if args.resume_only:
+            logger.info("Resume-only mode")
+            results = process_resume_only(summary_style=args.style)
+
+        elif args.batch:
             # Batch file mode
             batch_file = Path(args.batch)
             if not batch_file.exists():
