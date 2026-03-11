@@ -139,7 +139,7 @@ echo -e "${YELLOW}Processing Settings${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo "  Summary style: detailed (default)"
 echo "  GitHub upload: $([ "$github_enabled" = true ] && echo 'enabled' || echo 'disabled')"
-echo "  Cookies: auto-detect if available"
+echo "  Cookies: cookies.txt only (no browser)"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 

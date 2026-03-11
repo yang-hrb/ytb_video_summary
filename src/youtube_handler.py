@@ -196,7 +196,7 @@ class YouTubeHandler:
     def __init__(
         self,
         cookies_file: Optional[str] = None,
-        cookies_from_browser: bool = True,
+        cookies_from_browser: bool = False,
         browser: str = "chrome",
     ):
         """
@@ -204,7 +204,7 @@ class YouTubeHandler:
 
         Args:
             cookies_file: Path to cookies.txt file (for membership videos)
-            cookies_from_browser: Prefer browser session cookies when available
+            cookies_from_browser: Read cookies from local browser profile (default: disabled)
             browser: Browser name for cookiesfrombrowser (default: chrome)
         """
         self.cookies_file = cookies_file
@@ -390,7 +390,7 @@ class YouTubeHandler:
 def get_playlist_videos(
     playlist_url: str,
     cookies_file: Optional[str] = None,
-    cookies_from_browser: bool = True,
+    cookies_from_browser: bool = False,
     browser: str = "chrome",
 ) -> List[str]:
     """
@@ -399,7 +399,7 @@ def get_playlist_videos(
     Args:
         playlist_url: YouTube playlist URL
         cookies_file: Path to cookies.txt file
-        cookies_from_browser: Prefer browser session cookies when available
+        cookies_from_browser: Read cookies from local browser profile (default: disabled)
         browser: Browser name for cookiesfrombrowser (default: chrome)
 
     Returns:
@@ -452,7 +452,7 @@ def get_playlist_videos(
 def process_youtube_video(
     url: str,
     cookies_file: Optional[str] = None,
-    cookies_from_browser: bool = True,
+    cookies_from_browser: bool = False,
     browser: str = "chrome",
 ) -> Dict:
     """
@@ -461,7 +461,7 @@ def process_youtube_video(
     Args:
         url: YouTube video URL
         cookies_file: Path to cookies.txt file
-        cookies_from_browser: Prefer browser session cookies when available
+        cookies_from_browser: Read cookies from local browser profile (default: disabled)
         browser: Browser name for cookiesfrombrowser (default: chrome)
 
     Returns:

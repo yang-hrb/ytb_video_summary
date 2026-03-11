@@ -1114,8 +1114,8 @@ Examples:
     parser.add_argument(
         '--cookies-from-browser',
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help='Use cookies from local browser profile (default: enabled)'
+        default=False,
+        help='Use cookies from local browser profile (default: disabled; use --cookies-from-browser to enable)'
     )
 
     parser.add_argument(
