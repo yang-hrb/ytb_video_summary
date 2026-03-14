@@ -8,8 +8,7 @@
 
 - ✅ 支持 YouTube 普通视频和会员视频
 - ✅ 自动提取或生成字幕
-- ✅ AI 智能总结视频内容（支持 OpenRouter 和 Perplexity API）
-- ✅ **可配置总结 API** - 通过 `.env` 文件轻松切换 OpenRouter 和 Perplexity
+- ✅ AI 智能总结视频内容（使用 OpenRouter 级联模型流）
 - ✅ **可配置总结语言** - 通过 `.env` 文件选择中文（默认）或英文输出
 - ✅ **智能语言转录** - Whisper 保留原始音频语言
 - ✅ 节省存储空间（可选删除音频）

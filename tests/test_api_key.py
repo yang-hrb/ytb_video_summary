@@ -20,7 +20,7 @@ headers = {
 }
 
 payload = {
-    "model": "deepseek/deepseek-r1",
+    "model": "openrouter/free",
     "messages": [
         {
             "role": "user",

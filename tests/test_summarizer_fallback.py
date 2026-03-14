@@ -35,9 +35,10 @@ World
 
         summarizer = Summarizer(api_key='test-key')
         summarizer.openrouter_models = ['model-a', 'model-b']
-        summary = summarizer._summarize_with_waterfall('prompt', 100)
+        summary, model = summarizer._summarize_with_waterfall('prompt', 100)
 
         self.assertEqual(summary, 'ok-summary')
+        self.assertEqual(model, 'model-a')
         self.assertEqual(mock_post.call_count, 2)
 
 

@@ -11,7 +11,7 @@
 ## Build, Test, and Development Commands
 - `python -m venv venv && source venv/bin/activate` to create/activate a virtualenv.
 - `pip install -r requirements.txt` installs runtime dependencies.
-- `cp .env.example .env` then set `OPENROUTER_API_KEY` or `PERPLEXITY_API_KEY`.
+- `cp .env.example .env` then set `OPENROUTER_API_KEY`.
 - `python src/main.py -video "URL"` runs the CLI directly.
 - `./quick-run.sh` prompts for a URL and runs with defaults.
 - `./batch-run.sh` processes `input.txt` batch files.

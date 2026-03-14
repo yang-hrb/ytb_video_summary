@@ -8,8 +8,7 @@
 
 - ✅ Support for YouTube public and membership videos
 - ✅ Automatic subtitle extraction or generation
-- ✅ AI-powered video content summarization (supports OpenRouter and Perplexity APIs)
-- ✅ **Configurable summary API** - Easily switch between OpenRouter and Perplexity via `.env` file
+- ✅ AI-powered video content summarization (uses OpenRouter with a waterfall of models)
 - ✅ **Configurable summary language** - Choose between Chinese (default) or English output via `.env` file
 - ✅ **Language-aware transcription** - Whisper maintains original audio language
 - ✅ Save storage space (optional audio deletion)
@@ -42,7 +41,7 @@ Apple Podcasts   3. AI Summary        GitHub Upload
 **Processing Flow:**
 1. **Input**: YouTube URL, Playlist, Apple Podcast, Local MP3 folder, or Batch file
 2. **Transcription**: Whisper converts audio to text (preserves original language)
-3. **Summarization**: OpenRouter/Perplexity AI generates summary (configurable output language)
+3. **Summarization**: OpenRouter AI generates summary using a waterfall of models (configurable output language)
 4. **Output**: SRT transcript + Markdown summary + Enhanced report
 5. **Upload**: Individual files uploaded to GitHub immediately after each success
 
@@ -52,14 +51,19 @@ Apple Podcasts   3. AI Summary        GitHub Upload
 - 📝 **Comprehensive logging**: All operations logged to timestamped files
 - 🌐 **Language flexibility**: Transcription preserves original; summary language configurable
 
+**Summarization Model Waterfall:**
+The tool uses OpenRouter with a waterfall of models to ensure reliability:
+1. **Primary Model**: DeepSeek R1 (via Chimera)
+2. **Alternative Model**: Step-3.5-Flash
+3. **Alternative Model**: Trinity-Large-Preview
+4. **Fallback Model**: GPT-4o-Mini
+
 ## 📋 System Requirements
 
 - Python 3.9+
 - FFmpeg 4.0+
 - 8GB+ RAM (16GB recommended)
-- API Key for summarization (choose one):
-  - OpenRouter API Key (free option available)
-  - Perplexity API Key
+- OpenRouter API Key for summarization (free options available)
 
 ## 🚀 Quick Start
 
@@ -100,33 +104,15 @@ pip install -r requirements.txt
 # Copy environment template
 cp .env.example .env
 
-# Edit .env file and configure your summarization API
-# Option 1: Use OpenRouter (default)
-# SUMMARY_API=OPENROUTER
+# Edit .env file and configure your OpenRouter API Key
 # OPENROUTER_API_KEY=your_api_key_here
-
-# Option 2: Use Perplexity
-# SUMMARY_API=PERPLEXITY
-# PERPLEXITY_API_KEY=your_perplexity_api_key_here
 ```
 
-**Choose Your Summarization API:**
-
-You can use either OpenRouter or Perplexity AI for generating summaries. Set `SUMMARY_API` in your `.env` file to your preferred service.
-
-**Option 1: Get OpenRouter API Key (Free):**
+**Get OpenRouter API Key (Free):**
 1. Visit [OpenRouter.ai](https://openrouter.ai/)
 2. Sign up for free
 3. Get API Key from settings page
-4. Set `SUMMARY_API=OPENROUTER` in `.env`
-5. Add your key: `OPENROUTER_API_KEY=your_api_key_here`
-
-**Option 2: Get Perplexity API Key:**
-1. Visit [Perplexity.ai](https://www.perplexity.ai/)
-2. Sign up and get API access
-3. Get API Key from your account
-4. Set `SUMMARY_API=PERPLEXITY` in `.env`
-5. Add your key: `PERPLEXITY_API_KEY=your_perplexity_api_key_here`
+4. Add your key to `.env`: `OPENROUTER_API_KEY=your_api_key_here`
 
 ### 3. Run the Program
 

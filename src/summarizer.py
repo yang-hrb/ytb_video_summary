@@ -14,35 +14,23 @@ logger = logging.getLogger(__name__)
 
 
 class Summarizer:
-    """Use OpenRouter or Perplexity API for text summarization"""
+    """Use OpenRouter for text summarization"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None, api_type: Optional[str] = None):
-        self.api_type = (api_type or config.SUMMARY_API).upper()
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.openrouter_key = api_key or config.OPENROUTER_API_KEY
-        self.perplexity_key = config.PERPLEXITY_API_KEY
         self.model = model or config.OPENROUTER_MODEL
 
         self.openrouter_models = [
             config.MODEL_PRIORITY_1,
             config.MODEL_PRIORITY_2,
             config.MODEL_PRIORITY_3,
+            config.MODEL_FALLBACK,
         ]
 
         if not any(self.openrouter_models):
             self.openrouter_models = [self.model]
 
         self.openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.perplexity_url = "https://api.perplexity.ai"
-
-        self.perplexity_model = config.MODEL_FALLBACK or config.PERPLEXITY_MODEL
-        self.client = None
-
-        if self.perplexity_key:
-            try:
-                from openai import OpenAI
-                self.client = OpenAI(api_key=self.perplexity_key, base_url=self.perplexity_url)
-            except ImportError:
-                logger.warning("openai package missing, Perplexity fallback unavailable")
 
     @staticmethod
     def clean_srt_content(content: str) -> str:
@@ -183,11 +171,8 @@ Please output in the following format:
 
         return prompt
 
-    def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 2000) -> str:
+    def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 2000) -> tuple:
         prompt = self.create_prompt(transcript, style, language)
-
-        if self.api_type == 'PERPLEXITY':
-            return self._summarize_perplexity(prompt, max_tokens, self.perplexity_model)
         return self._summarize_with_waterfall(prompt, max_tokens)
 
     def _is_retryable_http_error(self, status_code: Optional[int]) -> bool:
@@ -203,7 +188,7 @@ Please output in the following format:
             "X-Title": "YouTube Video Summarizer"
         }
 
-    def _summarize_with_waterfall(self, prompt: str, max_tokens: int) -> str:
+    def _summarize_with_waterfall(self, prompt: str, max_tokens: int) -> tuple:
         if self.openrouter_key:
             for model_name in self.openrouter_models:
                 if not model_name:
@@ -211,7 +196,8 @@ Please output in the following format:
 
                 for attempt in range(1, 4):
                     try:
-                        return self._summarize_openrouter(prompt, max_tokens, model_name)
+                        summary = self._summarize_openrouter(prompt, max_tokens, model_name)
+                        return summary, model_name
                     except requests.exceptions.RequestException as e:
                         status_code = getattr(getattr(e, "response", None), "status_code", None)
                         retryable = self._is_retryable_http_error(status_code)
@@ -235,11 +221,7 @@ Please output in the following format:
                         logger.warning("OpenRouter model %s parsing failed, switching model.", model_name)
                         break
 
-        logger.warning("All OpenRouter free models failed, trying Perplexity fallback")
-        if self.perplexity_key and self.client:
-            return self._summarize_perplexity(prompt, max_tokens, self.perplexity_model)
-
-        raise RuntimeError("All OpenRouter models failed and Perplexity fallback is unavailable")
+        raise RuntimeError("All OpenRouter models failed")
 
     def _summarize_openrouter(self, prompt: str, max_tokens: int, model_name: str) -> str:
         payload = {
@@ -263,25 +245,9 @@ Please output in the following format:
         logger.info("Summary generated successfully")
         return summary.strip()
 
-    def _summarize_perplexity(self, prompt: str, max_tokens: int, model_name: str) -> str:
-        if not self.client:
-            raise RuntimeError("Perplexity client is unavailable")
-
-        logger.info("Sending request to Perplexity API (model: %s)...", model_name)
-        response = self.client.chat.completions.create(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
-            temperature=0.7,
-        )
-
-        summary = response.choices[0].message.content
-        logger.info("Summary generated successfully")
-        return summary.strip()
-
     def save_summary(self, summary: str, output_path: Path,
                      video_info: Optional[Dict] = None, video_id: Optional[str] = None,
-                     video_url: Optional[str] = None):
+                     video_url: Optional[str] = None, model_name: Optional[str] = None):
         content = ""
 
         if video_info:
@@ -291,12 +257,14 @@ Please output in the following format:
 
         content += summary
 
-        if video_id or video_url:
+        if video_id or video_url or model_name:
             content += "\n\n---\n\n## 📎 Reference Information\n\n"
             if video_id:
                 content += f"**Video ID**: `{video_id}`\n\n"
             if video_url:
-                content += f"**Video Link**: {video_url}\n"
+                content += f"**Video Link**: {video_url}\n\n"
+            if model_name:
+                content += f"**AI Model**: `{model_name}`\n"
 
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -312,10 +280,10 @@ def summarize_transcript(transcript: str, video_id: str,
     from .utils import create_report_filename
 
     summarizer = Summarizer()
-    summary = summarizer.summarize(transcript, style=style, language=language)
+    summary, model_used = summarizer.summarize(transcript, style=style, language=language)
 
     summary_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
-    summarizer.save_summary(summary, summary_path, video_info)
+    summarizer.save_summary(summary, summary_path, video_info, video_id, video_url, model_used)
 
     report_path = None
 
@@ -331,7 +299,7 @@ def summarize_transcript(transcript: str, video_id: str,
         )
         report_path = config.REPORT_DIR / report_filename
 
-        summarizer.save_summary(summary, report_path, video_info, video_id, video_url)
+        summarizer.save_summary(summary, report_path, video_info, video_id, video_url, model_used)
         logger.info(f"Report saved: {report_path}")
 
     return {

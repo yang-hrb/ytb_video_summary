@@ -7,20 +7,13 @@ load_dotenv()
 class Config:
     """Configuration class - Manages all environment variables and path settings"""
 
-    # Summary API Configuration
-    SUMMARY_API = os.getenv('SUMMARY_API', 'OPENROUTER').upper()  # OPENROUTER or PERPLEXITY
-
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
     OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'deepseek/deepseek-r1') # Model name to use, it may not be free!
     MODEL_PRIORITY_1 = os.getenv('MODEL_PRIORITY_1', 'tngtech/deepseek-r1t2-chimera:free')
     MODEL_PRIORITY_2 = os.getenv('MODEL_PRIORITY_2', 'stepfun/step-3.5-flash:free')
     MODEL_PRIORITY_3 = os.getenv('MODEL_PRIORITY_3', 'arcee-ai/trinity-large-preview:free')
-
-    # Perplexity API
-    PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY', '')
-    PERPLEXITY_MODEL = os.getenv('PERPLEXITY_MODEL', 'sonar-pro')  # Perplexity model to use
-    MODEL_FALLBACK = os.getenv('MODEL_FALLBACK', PERPLEXITY_MODEL)
+    MODEL_FALLBACK = os.getenv('MODEL_FALLBACK', 'openai/gpt-4o-mini') # Fallback model
 
     # GitHub Integration (optional)
     GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
@@ -66,14 +59,8 @@ class Config:
 
     def validate(self):
         """Validate that required configuration is set"""
-        if self.SUMMARY_API == 'OPENROUTER':
-            if not self.OPENROUTER_API_KEY and not self.PERPLEXITY_API_KEY:
-                raise ValueError("Set OPENROUTER_API_KEY or PERPLEXITY_API_KEY in .env file")
-        elif self.SUMMARY_API == 'PERPLEXITY':
-            if not self.PERPLEXITY_API_KEY and not self.OPENROUTER_API_KEY:
-                raise ValueError("Set PERPLEXITY_API_KEY or OPENROUTER_API_KEY in .env file")
-        else:
-            raise ValueError(f"Invalid SUMMARY_API value: {self.SUMMARY_API}. Must be 'OPENROUTER' or 'PERPLEXITY'")
+        if not self.OPENROUTER_API_KEY:
+            raise ValueError("Set OPENROUTER_API_KEY in .env file")
         return True
 
 config = Config()
