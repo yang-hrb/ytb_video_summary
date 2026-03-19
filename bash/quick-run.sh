@@ -4,7 +4,9 @@
 
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
+# Script lives in bash/ — go up one level to the project root so that
+# venv/, src/, config/ etc. are all accessible from the working directory.
+cd "$SCRIPT_DIR/.."
 
 # Colors
 GREEN='\033[0;32m'

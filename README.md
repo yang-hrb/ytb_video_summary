@@ -509,7 +509,7 @@ Edit `.env` file for custom configuration:
 OPENROUTER_API_KEY=your_api_key_here
 
 # OpenRouter model name
-OPENROUTER_MODEL=deepseek/deepseek-r1
+OPENROUTER_MODEL=openrouter/free
 
 # === Whisper Configuration ===
 # Whisper model size (tiny/base/small/medium/large)

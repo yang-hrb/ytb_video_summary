@@ -22,7 +22,7 @@ from src.youtube_handler import process_youtube_video, get_playlist_videos
 from src.apple_podcasts_handler import process_apple_podcast_episode, get_podcast_episodes
 from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcriber
 from src.summarizer import summarize_transcript
-from src.utils import clean_temp_files, get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename, is_apple_podcasts_url
+from src.utils import get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename, is_apple_podcasts_url
 from src.github_handler import upload_to_github, upload_logs_to_github
 from src.run_tracker import get_tracker, log_failure
 

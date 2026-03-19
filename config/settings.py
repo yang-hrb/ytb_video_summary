@@ -9,7 +9,7 @@ class Config:
 
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
-    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'deepseek/deepseek-r1') # Model name to use, it may not be free!
+    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openrouter/free') # Model name to use, it may not be free!
     MODEL_PRIORITY_1 = os.getenv('MODEL_PRIORITY_1', 'tngtech/deepseek-r1t2-chimera:free')
     MODEL_PRIORITY_2 = os.getenv('MODEL_PRIORITY_2', 'stepfun/step-3.5-flash:free')
     MODEL_PRIORITY_3 = os.getenv('MODEL_PRIORITY_3', 'arcee-ai/trinity-large-preview:free')
@@ -22,7 +22,7 @@ class Config:
 
     # Whisper
     WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')
-    WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'zh')
+    WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'auto')  # auto lets Whisper detect the language
 
     # Audio
     AUDIO_QUALITY = os.getenv('AUDIO_QUALITY', '64')

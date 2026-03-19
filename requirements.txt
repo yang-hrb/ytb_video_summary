@@ -7,11 +7,7 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 feedparser>=6.0.0  # For Apple Podcasts RSS feed parsing
 
-# Audio Processing
-ffmpeg-python>=0.2.0
-
 # Utilities
-tqdm>=4.66.0
 colorama>=0.4.6
 
 # Optional: 更快的 Whisper

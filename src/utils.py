@@ -114,10 +114,12 @@ def format_duration(seconds: int) -> str:
     Returns:
         Formatted duration (HH:MM:SS or MM:SS)
     """
-    duration = timedelta(seconds=seconds)
-    hours = duration.seconds // 3600
-    minutes = (duration.seconds % 3600) // 60
-    secs = duration.seconds % 60
+    # Use total_seconds() to correctly handle durations > 24 hours
+    # (timedelta.seconds wraps around at 86400, causing incorrect results for long streams)
+    total = int(timedelta(seconds=seconds).total_seconds())
+    hours = total // 3600
+    minutes = (total % 3600) // 60
+    secs = total % 60
 
     if hours > 0:
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
@@ -143,26 +145,8 @@ def format_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
-def clean_temp_files(temp_dir: Path, keep_pattern: Optional[str] = None):
-    """
-    Clean temporary files
-
-    Args:
-        temp_dir: Temporary files directory
-        keep_pattern: Pattern for files to keep (regex)
-    """
-    if not temp_dir.exists():
-        return
-
-    for file in temp_dir.iterdir():
-        if file.is_file():
-            if keep_pattern and re.match(keep_pattern, file.name):
-                continue
-            try:
-                file.unlink()
-                logger.info(f"Deleted temp file: {file.name}")
-            except Exception as e:
-                logger.error(f"Failed to delete {file.name}: {e}")
+# clean_temp_files() removed — audio cleanup is done inline via audio_path.unlink()
+# ensure_dir_exists() removed — directory creation is handled centrally by Config.__init__()
 
 
 def get_file_size_mb(file_path: Path) -> float:
@@ -270,14 +254,7 @@ def create_summary_header(title: str, duration: str, timestamp: Optional[str] = 
     return header
 
 
-def ensure_dir_exists(directory: Path):
-    """
-    Ensure directory exists, create if it doesn't
 
-    Args:
-        directory: Directory path
-    """
-    directory.mkdir(parents=True, exist_ok=True)
 
 
 def find_ffmpeg_location() -> Optional[str]:
@@ -332,21 +309,4 @@ def is_apple_podcasts_url(url: str) -> bool:
     return bool(re.search(r'podcasts\.apple\.com', url))
 
 
-def extract_podcast_id(url: str) -> Optional[str]:
-    """
-    Extract podcast ID from Apple Podcasts URL
-
-    URL formats:
-    - https://podcasts.apple.com/us/podcast/podcast-name/id1234567890
-    - https://podcasts.apple.com/podcast/id1234567890
-
-    Args:
-        url: Apple Podcasts URL
-
-    Returns:
-        Podcast ID or None
-    """
-    match = re.search(r'/id(\d+)', url)
-    if match:
-        return match.group(1)
-    return None
+# extract_podcast_id() removed — duplicated by ApplePodcastsHandler.extract_podcast_id()

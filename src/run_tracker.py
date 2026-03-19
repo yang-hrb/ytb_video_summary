@@ -1,6 +1,6 @@
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -188,22 +188,35 @@ class RunTracker:
             return {"by_status": {}, "by_type": {}, "total": 0}
 
 
-def log_failure(run_type: str, identifier: str, url_or_path: str, error_message: str):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"failures_{timestamp}.txt"
-    log_path = config.LOG_DIR / log_filename
+# Module-level variable: same process reuses the same failure log file for the entire session.
+# This prevents the logs/ directory from accumulating one file per failure (was 80+ files).
+_session_failure_log = None
+
+
+def log_failure(run_type: str, identifier: str, url_or_path: str,
+                error_message: str, stage: str = None):
+    """Log a failure to the session failure file (one file per process session).
+
+    Args:
+        run_type: Type of run ('youtube', 'local', 'podcast')
+        identifier: Video ID or file name
+        url_or_path: Original URL or file path
+        error_message: Error description
+        stage: Pipeline stage where failure occurred ('download', 'transcribe', 'summarize', 'upload')
+    """
+    global _session_failure_log
+    if _session_failure_log is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        _session_failure_log = config.LOG_DIR / f"failures_{timestamp}.txt"
 
     try:
-        with open(log_path, 'a', encoding='utf-8') as f:
-            f.write("=== Failure Report ===\n")
-            f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Type: {run_type}\n")
-            f.write(f"Identifier: {identifier}\n")
-            f.write(f"URL/Path: {url_or_path}\n")
-            f.write(f"Error: {error_message}\n")
-            f.write(f"{'=' * 50}\n\n")
+        with open(_session_failure_log, 'a', encoding='utf-8') as f:
+            f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
+                    f"stage={stage or 'unknown'} | type={run_type} | id={identifier}\n")
+            f.write(f"  URL/Path: {url_or_path}\n")
+            f.write(f"  Error: {error_message}\n\n")
 
-        logger.info("Failure logged to: %s", log_path)
+        logger.info("Failure logged to: %s", _session_failure_log)
     except Exception as e:
         logger.error("Failed to write failure log: %s", e)
 
@@ -216,3 +229,29 @@ def get_tracker() -> RunTracker:
     if _tracker is None:
         _tracker = RunTracker()
     return _tracker
+
+
+def cleanup_old_logs(log_dir: Path = None, keep_days: int = 30):
+    """Remove failure log files older than keep_days days.
+
+    Args:
+        log_dir: Directory containing log files (defaults to config.LOG_DIR)
+        keep_days: Number of days to retain log files (default: 30)
+    """
+    log_dir = log_dir or config.LOG_DIR
+    if not log_dir.exists():
+        return
+
+    cutoff = datetime.now() - timedelta(days=keep_days)
+    removed = 0
+    for f in log_dir.glob('failures_*.txt'):
+        try:
+            mtime = datetime.fromtimestamp(f.stat().st_mtime)
+            if mtime < cutoff:
+                f.unlink()
+                removed += 1
+        except Exception as e:
+            logger.warning("Could not remove old log file %s: %s", f.name, e)
+
+    if removed:
+        logger.info("Cleaned up %d old failure log file(s) from %s", removed, log_dir)

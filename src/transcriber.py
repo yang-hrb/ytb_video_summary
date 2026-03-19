@@ -97,20 +97,7 @@ class Transcriber:
 
         logger.info(f"SRT file saved: {output_path}")
 
-    def save_as_txt(self, result: Dict, output_path: Path):
-        """
-        Save transcription result as plain text
-
-        Args:
-            result: Whisper transcription result
-            output_path: Output file path
-        """
-        text = result.get('text', '')
-
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(text.strip())
-
-        logger.info(f"Text file saved: {output_path}")
+    # save_as_txt() removed — not used in the current pipeline
 
     def get_transcript_text(self, result: Dict) -> str:
         """

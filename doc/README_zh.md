@@ -508,7 +508,7 @@ SUMMARY_API=OPENROUTER
 # OpenRouter API 密钥（如果 SUMMARY_API=OPENROUTER 则必需）
 OPENROUTER_API_KEY=your_api_key_here
 # OpenRouter 模型名称
-OPENROUTER_MODEL=deepseek/deepseek-r1
+OPENROUTER_MODEL=openrouter/free
 
 # Perplexity API 密钥（如果 SUMMARY_API=PERPLEXITY 则必需）
 PERPLEXITY_API_KEY=your_perplexity_api_key_here
