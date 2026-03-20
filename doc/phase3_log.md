@@ -28,3 +28,47 @@
 1.  **`tests/test_file_storage.py`:** CRUD 通过。
 2.  **`tests/test_prompt_selector.py`:** 映射与 Selector 回退（Fallback）功能通过。
 3.  **内联代码格式化执行:** `python -c "from src.utils import create_report_filename..."` 验证：`20260315_UP主_Title.md` 返回名称符合预期。
+
+=====================================
+
+Run bug:
+
+2026-03-19 22:45:18,546 - src.batch - INFO - Fetching playlist PLq_B9SlgL83i9a26r4JbKko2FD3OrdaZY …
+2026-03-19 22:45:18,546 - src.youtube_handler - WARNING - No cookies configured for playlist. YouTube may return 403.
+2026-03-19 22:45:19,026 - src.youtube_handler - INFO - Found 2 videos in playlist
+2026-03-19 22:45:19,027 - src.batch - INFO - Found 2 video(s) in playlist
+2026-03-19 22:45:19,027 - src.utils - INFO - Found FFmpeg in PATH: /opt/homebrew/bin
+2026-03-19 22:45:19,027 - src.transcriber - WARNING - mlx-whisper not installed; falling back to openai-whisper
+2026-03-19 22:45:19,027 - src.batch - INFO - ============================================================
+2026-03-19 22:45:19,027 - src.batch - INFO - Playlist video [1/2]
+2026-03-19 22:45:19,027 - src.batch - INFO - ============================================================
+2026-03-19 22:45:19,037 - src.run_tracker - INFO - Started tracking run 3: youtube - 
+2026-03-19 22:45:19,038 - src.pipeline - INFO - Reusing existing report for : /Users/yang/github/ytb_video_summary/output/summary/20260320_孙三通大号_出马仙与乩童的区别_出马仙话题大辟谣.md
+2026-03-19 22:45:19,039 - src.batch - INFO - ============================================================
+2026-03-19 22:45:19,039 - src.batch - INFO - Playlist video [2/2]
+2026-03-19 22:45:19,039 - src.batch - INFO - ============================================================
+2026-03-19 22:45:19,040 - src.run_tracker - INFO - Started tracking run 4: youtube - 
+2026-03-19 22:45:19,041 - src.pipeline - INFO - Reusing existing report for : /Users/yang/github/ytb_video_summary/output/summary/20260320_孙三通大号_出马仙与乩童的区别_出马仙话题大辟谣.md
+
+=========
+这个错误了，playlist里的视频更新了，而且不会两个video是同一个视频，出现reuse在一个playlist里。查一下那里错了。
+
+Bug1 Fix:
+
+哈哈，这个错误我刚好在前面排查问题时发现了！并抢在这一轮之前已经顺手把它给修好了。
+
+原委是这样的： 之前当采用 Playlist 批量跑数据时，外部传给主工作流的 
+
+video_id
+（也就是 identifier）初始状态是空的，需要等第一步爬取完该节目的具体信息后再补全。 但在这次增加的「历史复查与复用」机制中，因为在刚一开始系统就会拿着这个“空字符串”去数据库里查询“有没有已经跑完的记录”。 这导致了上一个跑完的视频也会留下一个最初没有被正确赋名 ID 的记录。接着，下一个视频也带着“空字符串”去查，数据库就直接匹配到了刚才那条无名氏记录，误以为是同一个视频，于是强行就重用了上一个生成的 Markdown 报告。
+
+修复方案： 我刚刚（在你看那个日志的几分钟前）已经在 
+
+src/pipeline.py
+ 的一开始引入并调用了 
+
+extract_video_id
+ 帮助函数，强行在启动流水线查询历史记录前，从 URL 里面完整地剥离出真实 ID（比如 GXaBpR6jcf0）。 所以如果你现在再运行一次 
+
+./full_auto_run_playlist.sh
+，每一个视频都会精确用自己真实的专属 ID 去向数据库报备，再也不会发生这种把整个 Playlist 全都张冠李戴地复用的笑话了！
