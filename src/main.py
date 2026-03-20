@@ -856,6 +856,17 @@ Examples:
             logger.info("Use --help for detailed help")
             sys.exit(1)
 
+        # Generate daily summary if upload is configured
+        if args.upload and (config.GITHUB_TOKEN and config.GITHUB_REPO):
+            try:
+                from src.daily_summary import generate_daily_summary
+                logger.info("")
+                logger.info("="*60)
+                log_step("Final", "Generating and uploading daily digest...")
+                generate_daily_summary(upload=True)
+            except Exception as e:
+                logger.warning(f"Failed to generate daily digest: {e}")
+
         # Upload logs and database to GitHub if configured
         if args.upload and (config.GITHUB_TOKEN and config.GITHUB_REPO):
             logger.info("")

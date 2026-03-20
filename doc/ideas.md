@@ -7,3 +7,41 @@
 
 孙三通（大号）
 
+summary/
+├── {uploader}/
+│   ├── info.json
+│   ├── summary_prompt.txt
+│   └── {YYYY_MM}/
+│       └── {upload_date}_{uploader}_{title}.md
+├── daily_summary/
+│   └── {YYYY_MM}/
+│       └── {YYYY-MM-DD}.md
+
+
+
+=============================
+summary/
+├── {uploader}/
+│   ├── info.json
+│   ├── summary_prompt.txt
+│   └── {YYYY_MM}/
+│       └── {upload_date}_{uploader}_{title}.md
+
+这部分看到了，没问题。非常好。
+
+但这个没看到
+├── daily_summary/
+│   └── {YYYY_MM}/
+│       └── {YYYY-MM-DD}.md
+
+把这个daily放入
+daily_digeset/
+│  └── {YYYY_MM}/
+│     └── {YYYY-MM-DD}-{timestamp:HH:MM}.md
+
+运行完成后，也上传到github
+
+=======================
+
+
+

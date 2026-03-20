@@ -18,6 +18,7 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
     date_parsed = datetime.strptime(target_date, "%Y%m%d")
     year_month = date_parsed.strftime("%Y_%m")
     day_str = date_parsed.strftime("%Y-%m-%d")
+    timestamp_str = datetime.now().strftime("%H_%M")
 
     tracker = get_tracker()
     
@@ -73,9 +74,9 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
         row_str = f"| {uploader} | {title} | {model} | {link} |"
         content.append(row_str)
         
-    out_dir = config.REPORT_DIR / 'daily_summary' / year_month
+    out_dir = config.REPORT_DIR / 'daily_digest' / year_month
     out_dir.mkdir(parents=True, exist_ok=True)
-    report_file = out_dir / f"{day_str}.md"
+    report_file = out_dir / f"{day_str}-{timestamp_str}.md"
     
     with open(report_file, 'w', encoding='utf-8') as f:
         f.write("\n".join(content) + "\n")
@@ -87,7 +88,7 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
             from src.github_handler import upload_to_github
             remote_url = upload_to_github(
                 report_file, 
-                remote_folder="summary/daily_summary", 
+                remote_folder="summary/daily_digest", 
                 use_month_folder=True
             )
             logger.info(f"Daily summary uploaded: {remote_url}")
