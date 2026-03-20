@@ -7,6 +7,16 @@ logs/  # includes run_track.db and failure logs
 failure*.txt
 bin/*
 
+# files
+*.db
+*.mp3
+*.mp4
+*.wav
+*.opus
+*.srt
+*.log
+*.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

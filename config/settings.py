@@ -1,4 +1,5 @@
 import os
+import platform
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -10,10 +11,10 @@ class Config:
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
     OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openrouter/free') # Model name to use, it may not be free!
-    MODEL_PRIORITY_1 = os.getenv('MODEL_PRIORITY_1', 'tngtech/deepseek-r1t2-chimera:free')
-    MODEL_PRIORITY_2 = os.getenv('MODEL_PRIORITY_2', 'stepfun/step-3.5-flash:free')
-    MODEL_PRIORITY_3 = os.getenv('MODEL_PRIORITY_3', 'arcee-ai/trinity-large-preview:free')
-    MODEL_FALLBACK = os.getenv('MODEL_FALLBACK', 'openai/gpt-4o-mini') # Fallback model
+    MODEL_PRIORITY_1 = os.getenv('MODEL_PRIORITY_1', 'openrouter/free')
+    MODEL_PRIORITY_2 = os.getenv('MODEL_PRIORITY_2', 'openrouter/free')
+    MODEL_PRIORITY_3 = os.getenv('MODEL_PRIORITY_3', 'openrouter/free')
+    MODEL_FALLBACK = os.getenv('MODEL_FALLBACK', 'openrouter/free') # Fallback model
 
     # GitHub Integration (optional)
     GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
@@ -23,6 +24,19 @@ class Config:
     # Whisper
     WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')
     WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'auto')  # auto lets Whisper detect the language
+    # 'auto' → mlx on Apple Silicon, openai-whisper everywhere else;
+    # set to 'mlx' or 'openai' to force a specific backend.
+    WHISPER_BACKEND = os.getenv('WHISPER_BACKEND', 'auto')
+
+    @staticmethod
+    def resolve_whisper_backend() -> str:
+        """Return the concrete backend name: 'mlx' or 'openai'."""
+        backend = Config.WHISPER_BACKEND.lower().strip()
+        if backend == 'auto':
+            if platform.system() == 'Darwin' and platform.machine() == 'arm64':
+                return 'mlx'
+            return 'openai'
+        return backend if backend in ('mlx', 'openai') else 'openai'
 
     # Audio
     AUDIO_QUALITY = os.getenv('AUDIO_QUALITY', '64')

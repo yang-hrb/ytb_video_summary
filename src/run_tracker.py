@@ -16,6 +16,18 @@ class RunTracker:
         self.db_path = db_path or config.LOG_DIR / "run_track.db"
         self._init_database()
 
+    # Phase-2 columns added to existing runs table
+    _PHASE2_COLUMNS = [
+        ("transcript_path", "TEXT"),
+        ("summary_path", "TEXT"),
+        ("report_path", "TEXT"),
+        ("github_url", "TEXT"),
+        ("model_used", "TEXT"),
+        ("audio_path", "TEXT"),
+        ("summary_style", "TEXT"),
+        ("retry_count", "INTEGER DEFAULT 0"),
+    ]
+
     def _init_database(self):
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -50,9 +62,18 @@ class RunTracker:
 
                 cursor.execute("PRAGMA table_info(runs)")
                 columns = [row[1] for row in cursor.fetchall()]
+
+                # Backward-compatible migrations
                 if "stage" not in columns:
                     cursor.execute("ALTER TABLE runs ADD COLUMN stage TEXT")
                     logger.info("Added stage column to runs table")
+
+                for col_name, col_def in self._PHASE2_COLUMNS:
+                    if col_name not in columns:
+                        cursor.execute(
+                            f"ALTER TABLE runs ADD COLUMN {col_name} {col_def}"
+                        )
+                        logger.info("Added column %s to runs table", col_name)
 
                 conn.commit()
                 logger.debug("Database initialized: %s", self.db_path)
@@ -105,6 +126,51 @@ class RunTracker:
             logger.error("Failed to update run status: %s", e)
             raise
 
+    def update_artifacts(self, run_id: int, **kwargs):
+        """Batch-update artifact paths and metadata for a run.
+
+        Accepted keyword arguments (all optional):
+            transcript_path, summary_path, report_path, github_url,
+            model_used, audio_path, summary_style
+        """
+        allowed = {
+            "transcript_path", "summary_path", "report_path",
+            "github_url", "model_used", "audio_path", "summary_style",
+        }
+        updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+        if not updates:
+            return
+        now = datetime.now()
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        set_clause += ", updated_at = ?"
+        params = list(updates.values()) + [now, run_id]
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    f"UPDATE runs SET {set_clause} WHERE id = ?", params
+                )
+                conn.commit()
+                logger.debug("Updated artifacts for run %s: %s", run_id, list(updates))
+        except Exception as e:
+            logger.error("Failed to update artifacts for run %s: %s", run_id, e)
+            raise
+
+    def increment_retry(self, run_id: int):
+        """Increment the retry_count for a run by 1."""
+        now = datetime.now()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE runs SET retry_count = COALESCE(retry_count, 0) + 1, "
+                    "updated_at = ? WHERE id = ?",
+                    (now, run_id),
+                )
+                conn.commit()
+                logger.debug("Incremented retry_count for run %s", run_id)
+        except Exception as e:
+            logger.error("Failed to increment retry count for run %s: %s", run_id, e)
+            raise
+
     def get_run_info(self, run_id: int) -> Optional[Dict]:
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -119,8 +185,26 @@ class RunTracker:
             logger.error("Failed to get run info: %s", e)
             return None
 
+    # All statuses from which a run can be recovered without restarting from scratch.
+    RESUMABLE_STATUS_MAP: Dict[str, str] = {
+        'DOWNLOAD_FAILED':   'download',
+        'TRANSCRIBE_FAILED': 'transcribe',
+        'TRANSCRIPT_READY':  'summarize',
+        'TRANSCRIPT_GENERATED': 'summarize',  # legacy alias
+        'SUMMARIZE_FAILED':  'summarize',
+        'SUMMARY_FAILED':    'summarize',      # legacy alias
+        'SUMMARY_READY':     'upload',
+        'UPLOAD_FAILED':     'upload',
+    }
+
     def get_resumable_runs(self, statuses: Optional[List[str]] = None) -> list:
-        statuses = statuses or ["TRANSCRIPT_GENERATED", "SUMMARY_FAILED"]
+        """Return runs that can be resumed from a mid-pipeline stage.
+
+        Args:
+            statuses: Explicit list of statuses to query.  Defaults to all keys
+                      in RESUMABLE_STATUS_MAP.
+        """
+        statuses = statuses or list(self.RESUMABLE_STATUS_MAP.keys())
         placeholders = ",".join("?" for _ in statuses)
 
         try:
@@ -142,14 +226,24 @@ class RunTracker:
             return []
 
     def get_failed_runs(self, limit: Optional[int] = None) -> list:
+        """Return runs in any failed status."""
+        failed_statuses = (
+            'DOWNLOAD_FAILED', 'TRANSCRIBE_FAILED',
+            'SUMMARIZE_FAILED', 'SUMMARY_FAILED',  # legacy
+            'UPLOAD_FAILED', 'failed',
+        )
+        placeholders = ",".join("?" for _ in failed_statuses)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                query = "SELECT * FROM runs WHERE status IN ('failed', 'SUMMARY_FAILED') ORDER BY started_at DESC"
+                query = (
+                    f"SELECT * FROM runs WHERE status IN ({placeholders}) "
+                    "ORDER BY started_at DESC"
+                )
                 if limit:
                     query += f" LIMIT {limit}"
-                cursor.execute(query)
+                cursor.execute(query, failed_statuses)
                 rows = cursor.fetchall()
                 return [dict(row) for row in rows]
         except Exception as e:
