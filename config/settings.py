@@ -60,7 +60,7 @@ class Config:
     LOG_DIR = BASE_DIR / 'logs'
     TRANSCRIPT_DIR = OUTPUT_DIR / 'transcripts'
     SUMMARY_DIR = OUTPUT_DIR / 'summaries'
-    REPORT_DIR = OUTPUT_DIR / 'reports'
+    REPORT_DIR = OUTPUT_DIR / 'summary'
 
     def __init__(self):
         """Initialize and automatically create necessary directories"""

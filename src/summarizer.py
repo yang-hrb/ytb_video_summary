@@ -171,8 +171,12 @@ Please output in the following format:
 
         return prompt
 
-    def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 2000) -> tuple:
-        prompt = self.create_prompt(transcript, style, language)
+    def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 4096, custom_prompt: Optional[str] = None) -> tuple:
+        if custom_prompt:
+            transcript_clean = self.clean_srt_content(transcript)
+            prompt = f"{custom_prompt}\n\nVideo transcript:\n{transcript_clean}"
+        else:
+            prompt = self.create_prompt(transcript, style, language)
         return self._summarize_with_waterfall(prompt, max_tokens)
 
     def _is_retryable_http_error(self, status_code: Optional[int]) -> bool:
@@ -279,8 +283,17 @@ def summarize_transcript(transcript: str, video_id: str,
                         video_url: Optional[str] = None) -> Dict:
     from .utils import create_report_filename
 
+    uploader = video_info.get('uploader', '') if video_info else ''
+    
+    from .prompt_selector import PromptSelector
+    selector = PromptSelector(config.BASE_DIR / 'config')
+    selection = selector.select_for_uploader(uploader)
+    custom_prompt = selection.get('prompt_text')
+
     summarizer = Summarizer()
-    summary, model_used = summarizer.summarize(transcript, style=style, language=language)
+    summary, model_used = summarizer.summarize(
+        transcript, style=style, language=language, custom_prompt=custom_prompt
+    )
 
     summary_path = config.SUMMARY_DIR / f"{video_id}_summary.md"
     summarizer.save_summary(summary, summary_path, video_info, video_id, video_url, model_used)
@@ -288,12 +301,12 @@ def summarize_transcript(transcript: str, video_id: str,
     report_path = None
 
     if video_info and video_info.get('title'):
-        uploader = video_info.get('uploader', '')
         is_local_mp3 = (uploader == 'Local Audio')
 
         report_filename = create_report_filename(
             video_info['title'],
             uploader=uploader,
+            upload_date=video_info.get('upload_date', ''),
             summary=summary,
             is_local_mp3=is_local_mp3
         )
@@ -304,5 +317,6 @@ def summarize_transcript(transcript: str, video_id: str,
 
     return {
         'summary_path': summary_path,
-        'report_path': report_path
+        'report_path': report_path,
+        'prompt_info': selection
     }

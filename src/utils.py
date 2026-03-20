@@ -25,10 +25,10 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
     Returns:
         Sanitized filename
     """
-    # Remove illegal characters
-    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
-    # Remove extra spaces
-    filename = re.sub(r'\s+', ' ', filename).strip()
+    # Keep only Chinese characters, English letters, digits, and spaces
+    filename = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9\s]', '', filename)
+    # Replace one or more spaces with a single underscore, and strip ends
+    filename = re.sub(r'\s+', '_', filename).strip('_')
     # Limit length
     if len(filename) > max_length:
         filename = filename[:max_length]
@@ -63,7 +63,7 @@ def extract_summary_title(summary: str, max_length: int = 50) -> str:
     return "summary"
 
 
-def create_report_filename(video_title: str, uploader: str = "", summary: str = "", is_local_mp3: bool = False) -> str:
+def create_report_filename(video_title: str, uploader: str = "", upload_date: str = "", summary: str = "", is_local_mp3: bool = False) -> str:
     """
     Create report filename
 
@@ -73,33 +73,28 @@ def create_report_filename(video_title: str, uploader: str = "", summary: str = 
     Args:
         video_title: Video title (or MP3 filename without extension)
         uploader: Uploader name (first 10 characters)
+        upload_date: The video's upload date (YYYYMMDD) or similar timestamp
         summary: Summary content (for generating content-related title)
         is_local_mp3: True if processing local MP3 file
 
     Returns:
         Formatted filename
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    timestamp = upload_date or datetime.now().strftime("%Y%m%d")
 
     # Special format for local MP3 files: timestamp_mp3_filename.md
     if is_local_mp3:
         clean_filename = sanitize_filename(video_title, max_length=100)
-        return f"{timestamp}_mp3_{clean_filename}.md"
+        return f"{datetime.now().strftime('%Y%m%d_%H%M')}_mp3_{clean_filename}.md"
 
     # Standard format for videos: timestamp_uploader_content-title.md
-    # Process uploader name (first 10 characters)
     uploader_part = ""
     if uploader:
-        clean_uploader = sanitize_filename(uploader, max_length=10)
+        clean_uploader = sanitize_filename(uploader, max_length=15)
         if clean_uploader:
             uploader_part = f"{clean_uploader}_"
 
-    # Extract title from summary content
-    if summary:
-        content_title = extract_summary_title(summary, max_length=50)
-    else:
-        # Use video title if no summary
-        content_title = sanitize_filename(video_title, max_length=50)
+    content_title = sanitize_filename(video_title, max_length=20)
 
     return f"{timestamp}_{uploader_part}{content_title}.md"
 

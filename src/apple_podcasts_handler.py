@@ -165,11 +165,19 @@ class ApplePodcastsHandler:
                 except:
                     pass
 
+            # Extract upload_date (YYYYMMDD)
+            upload_date = ''
+            published_parsed = entry.get('published_parsed')
+            if published_parsed:
+                import time
+                upload_date = time.strftime('%Y%m%d', published_parsed)
+
             return {
                 'title': entry.get('title', 'Unknown Episode'),
                 'description': entry.get('description', ''),
                 'summary': entry.get('summary', ''),
                 'published': entry.get('published', ''),
+                'upload_date': upload_date,
                 'audio_url': audio_url,
                 'audio_type': audio_type,
                 'audio_length': audio_length,

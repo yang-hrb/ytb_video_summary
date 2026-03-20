@@ -631,6 +631,16 @@ Examples:
         help='Upload report files to GitHub repository'
     )
 
+    watcher_group = parser.add_argument_group('watcher')
+    watcher_group.add_argument('--import-watchlist', type=str, metavar='FILE', help='Import channel URLs from text file into watchlist')
+    watcher_group.add_argument('--list-watch-channels', action='store_true', help='List currently monitored channels')
+    watcher_group.add_argument('--watch-run-once', action='store_true', help='Execute a single watch scan across all active channels')
+    watcher_group.add_argument('--watch-daemon', action='store_true', help='Run the watcher continuously (daemon mode)')
+    watcher_group.add_argument('--watch-time', type=str, help='Interval for daemon execution (seconds)')
+
+    summary_group = parser.add_argument_group('summary')
+    summary_group.add_argument('--daily-summary', type=str, nargs='?', const='today', metavar='DATE', help='Generate daily summary (optional format: YYYYMMDD)')
+
     args = parser.parse_args()
 
     # Print banner
@@ -662,6 +672,57 @@ Examples:
         if args.resume_only:
             logger.info("Resume-only mode")
             results = process_resume_only(summary_style=args.style, upload=args.upload)
+
+        elif args.import_watchlist:
+            from src.channel_watcher import ChannelWatcher
+            w = ChannelWatcher(cookies_file=args.cookies, cookies_from_browser=args.cookies_from_browser, browser=args.browser)
+            w.import_watchlist(Path(args.import_watchlist))
+            sys.exit(0)
+            
+        elif args.list_watch_channels:
+            from src.channel_watcher import ChannelWatcher
+            w = ChannelWatcher()
+            channels = w.list_watch_channels()
+            print("\n📺 Watchlist Channels")
+            print("=" * 60)
+            for c in channels:
+                print(f"ID: {c['channel_id']} | Active: {c['is_active']} | Last seen: {c['last_seen_upload_date']} | Total processed: {c['videos_processed_total']}")
+            sys.exit(0)
+            
+        elif args.watch_run_once:
+            logger.info("Executing single watch scan...")
+            from src.channel_watcher import ChannelWatcher
+            w = ChannelWatcher(cookies_file=args.cookies, cookies_from_browser=args.cookies_from_browser, browser=args.browser)
+            processed = w.execute_scan(upload=args.upload)
+            logger.info(f"Scan complete. Processed {processed} videos.")
+            sys.exit(0)
+            
+        elif args.watch_daemon:
+            logger.info("Starting watcher daemon (pressing Ctrl+C to stop)...")
+            from src.channel_watcher import ChannelWatcher
+            import time
+            w = ChannelWatcher(cookies_file=args.cookies, cookies_from_browser=args.cookies_from_browser, browser=args.browser)
+            interval = 3600
+            if args.watch_time:
+                try:
+                    interval = int(args.watch_time)
+                except ValueError:
+                    logger.warning("Could not parse watch_time as int seconds, using 3600s.")
+            try:
+                while True:
+                    w.execute_scan(upload=args.upload)
+                    logger.info(f"Sleeping for {interval}s")
+                    time.sleep(interval)
+            except KeyboardInterrupt:
+                logger.info("Daemon stopped.")
+            sys.exit(0)
+
+        elif args.daily_summary:
+            from src.daily_summary import generate_daily_summary
+            date_str = None if args.daily_summary == 'today' else args.daily_summary
+            url = generate_daily_summary(target_date=date_str, upload=args.upload)
+            print(f"Daily summary generated: {url}")
+            sys.exit(0)
 
         elif args.batch:
             # Batch file mode

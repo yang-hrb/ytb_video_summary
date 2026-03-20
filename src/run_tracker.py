@@ -28,6 +28,14 @@ class RunTracker:
         ("retry_count", "INTEGER DEFAULT 0"),
     ]
 
+    # Phase-3 columns added to existing runs table
+    _PHASE3_COLUMNS = [
+        ("prompt_type", "TEXT"),
+        ("prompt_source", "TEXT"),
+        ("prompt_index", "INTEGER"),
+        ("prompt_file", "TEXT"),
+    ]
+
     def _init_database(self):
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -60,6 +68,68 @@ class RunTracker:
                     """
                 )
 
+                # Phase 3: file_storage table
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS file_storage (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        run_id INTEGER NOT NULL,
+                        file_type TEXT NOT NULL,
+                        file_path TEXT NOT NULL,
+                        file_size INTEGER,
+                        github_url TEXT,
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL,
+                        deleted_at TIMESTAMP,
+                        FOREIGN KEY (run_id) REFERENCES runs(id)
+                    )
+                    """
+                )
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_fs_run_id ON file_storage(run_id)")
+
+                # Phase 3: watch_channels table
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS watch_channels (
+                        channel_id TEXT PRIMARY KEY,
+                        name TEXT,
+                        platform TEXT DEFAULT 'youtube',
+                        added_at TIMESTAMP NOT NULL,
+                        is_active BOOLEAN DEFAULT 1
+                    )
+                    """
+                )
+
+                # Phase 3: watch_channel_state table
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS watch_channel_state (
+                        channel_id TEXT PRIMARY KEY,
+                        last_scan_time TIMESTAMP NOT NULL,
+                        last_seen_upload_date TEXT,
+                        last_seen_video_id TEXT,
+                        videos_processed_total INTEGER DEFAULT 0,
+                        FOREIGN KEY (channel_id) REFERENCES watch_channels(channel_id)
+                    )
+                    """
+                )
+
+                # Phase 3: watch_scan_runs table
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS watch_scan_runs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        scan_start TIMESTAMP NOT NULL,
+                        scan_end TIMESTAMP,
+                        channels_scanned INTEGER DEFAULT 0,
+                        new_videos_found INTEGER DEFAULT 0,
+                        videos_processed INTEGER DEFAULT 0,
+                        errors_count INTEGER DEFAULT 0,
+                        status TEXT NOT NULL
+                    )
+                    """
+                )
+
                 cursor.execute("PRAGMA table_info(runs)")
                 columns = [row[1] for row in cursor.fetchall()]
 
@@ -68,7 +138,7 @@ class RunTracker:
                     cursor.execute("ALTER TABLE runs ADD COLUMN stage TEXT")
                     logger.info("Added stage column to runs table")
 
-                for col_name, col_def in self._PHASE2_COLUMNS:
+                for col_name, col_def in self._PHASE2_COLUMNS + self._PHASE3_COLUMNS:
                     if col_name not in columns:
                         cursor.execute(
                             f"ALTER TABLE runs ADD COLUMN {col_name} {col_def}"
@@ -136,6 +206,7 @@ class RunTracker:
         allowed = {
             "transcript_path", "summary_path", "report_path",
             "github_url", "model_used", "audio_path", "summary_style",
+            "prompt_type", "prompt_source", "prompt_index", "prompt_file",
         }
         updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
         if not updates:
@@ -280,6 +351,64 @@ class RunTracker:
         except Exception as e:
             logger.error("Failed to get stats: %s", e)
             return {"by_status": {}, "by_type": {}, "total": 0}
+
+    # ------------------------------------------------------------------
+    # Phase 3: file_storage methods
+    # ------------------------------------------------------------------
+    def register_file(self, run_id: int, file_type: str, file_path: str, file_size: Optional[int] = None, github_url: Optional[str] = None) -> int:
+        now = datetime.now()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO file_storage (run_id, file_type, file_path, file_size, github_url, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (run_id, file_type, file_path, file_size, github_url, now, now)
+            )
+            conn.commit()
+            return cursor.lastrowid
+            
+    def get_files_for_run(self, run_id: int, file_type: Optional[str] = None) -> List[dict]:
+        query = "SELECT * FROM file_storage WHERE run_id = ? AND deleted_at IS NULL"
+        params = [run_id]
+        if file_type:
+            query += " AND file_type = ?"
+            params.append(file_type)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+            
+    def mark_file_deleted(self, file_storage_id: int):
+        now = datetime.now()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE file_storage SET deleted_at = ?, updated_at = ? WHERE id = ?", (now, now, file_storage_id))
+            conn.commit()
+            
+    def update_file_github_url(self, file_storage_id: int, github_url: str):
+        now = datetime.now()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE file_storage SET github_url = ?, updated_at = ? WHERE id = ?", (github_url, now, file_storage_id))
+            conn.commit()
+            
+    def find_latest_completed_report(self, identifier: str) -> Optional[dict]:
+        # find the latest completed run with this identifier that has a report
+        query = """
+        SELECT fs.*, r.id as r_id 
+        FROM runs r
+        JOIN file_storage fs ON r.id = fs.run_id
+        WHERE r.identifier = ? AND r.status = 'COMPLETED' 
+          AND fs.file_type = 'report' AND fs.deleted_at IS NULL
+        ORDER BY r.updated_at DESC LIMIT 1
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, (identifier,))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+        return None
 
 
 # Module-level variable: same process reuses the same failure log file for the entire session.

@@ -88,31 +88,53 @@ class ProcessingPipeline:
         log_failure(self.run_type, self.identifier, self.url_or_path, str(error), stage=self.current_stage)
 
     def _complete(self, transcript_path=None, summary_path=None, report_path=None,
-                  github_url=None, model_used=None, audio_path=None):
+                  github_url=None, model_used=None, audio_path=None, prompt_info=None):
         if self.run_id:
             self.tracker.update_status(self.run_id, 'COMPLETED', error_message=None, stage='done')
-            self.tracker.update_artifacts(
-                self.run_id,
-                transcript_path=str(transcript_path) if transcript_path else None,
-                summary_path=str(summary_path) if summary_path else None,
-                report_path=str(report_path) if report_path else None,
-                github_url=github_url,
-                model_used=model_used,
-                audio_path=str(audio_path) if audio_path else None,
-                summary_style=self.summary_style,
-            )
+            
+            updates = {
+                "transcript_path": str(transcript_path) if transcript_path else None,
+                "summary_path": str(summary_path) if summary_path else None,
+                "report_path": str(report_path) if report_path else None,
+                "github_url": github_url,
+                "model_used": model_used,
+                "audio_path": str(audio_path) if audio_path else None,
+                "summary_style": self.summary_style,
+            }
+            if prompt_info:
+                updates.update({
+                    "prompt_type": prompt_info.get("prompt_type"),
+                    "prompt_source": prompt_info.get("prompt_source"),
+                    "prompt_index": prompt_info.get("prompt_index"),
+                    "prompt_file": prompt_info.get("prompt_file"),
+                })
+                
+            self.tracker.update_artifacts(self.run_id, **updates)
+
+            # Register files to file_storage table
+            def _reg(path_obj, ftype, gurl=None):
+                if not path_obj: return
+                p = Path(path_obj) if isinstance(path_obj, str) else path_obj
+                if getattr(p, 'exists', lambda: False)():
+                    sz = p.stat().st_size
+                    self.tracker.register_file(self.run_id, ftype, str(p), file_size=sz, github_url=gurl)
+            
+            _reg(transcript_path, 'transcript')
+            _reg(summary_path, 'summary')
+            _reg(report_path, 'report', gurl=github_url)
+            _reg(audio_path, 'audio')
 
     # ------------------------------------------------------------------
     # Upload helper (shared by all run types)
     # ------------------------------------------------------------------
 
-    def _upload_report(self, report_file: Path) -> Optional[str]:
+    def _upload_report(self, report_file: Path, uploader: Optional[str] = None) -> Optional[str]:
         """Upload report to GitHub; returns URL or None on failure."""
         if not self.upload or not report_file:
             return None
         self._set_stage('upload', 'UPLOADING')
         try:
-            github_url = upload_to_github(report_file)
+            github_url = upload_to_github(report_file, uploader=uploader)
             if github_url:
                 logger.info("GitHub URL: %s", github_url)
             return github_url
@@ -124,6 +146,33 @@ class ProcessingPipeline:
                 )
             return None
 
+    def _upload_info_json(self, video_info: dict):
+        if not self.upload or not video_info or not video_info.get('uploader'):
+            return
+        uploader = video_info['uploader']
+        import json
+        from datetime import datetime
+        now_str = datetime.now().isoformat()
+        info = {
+            "name": uploader,
+            "description": video_info.get('description', '')[:500] if video_info.get('description') else '',
+            "thumbnail_url": video_info.get('thumbnail_url', ''),
+            "channel_url": video_info.get('channel_url', ''),
+            "platform": self.run_type,
+            "last_updated": now_str,
+            "total_videos_processed": 1
+        }
+        from src.utils import sanitize_filename
+        safe_up = sanitize_filename(uploader)
+        info_path = config.TEMP_DIR / f"info_{safe_up}.json"
+        
+        try:
+            with open(info_path, 'w', encoding='utf-8') as f:
+                json.dump(info, f, ensure_ascii=False, indent=4)
+            upload_to_github(info_path, uploader=uploader, use_month_folder=False)
+        except Exception as e:
+            logger.warning("Failed to upload info.json: %s", e)
+            
     # ------------------------------------------------------------------
     # YouTube video pipeline
     # ------------------------------------------------------------------
@@ -137,9 +186,26 @@ class ProcessingPipeline:
     ) -> dict:
         """Run the full pipeline for a YouTube video."""
         from src.youtube_handler import process_youtube_video  # local import to avoid circularity
+        from src.utils import extract_video_id
+
+        if not self.identifier and self.url_or_path:
+            vid = extract_video_id(self.url_or_path)
+            if vid:
+                self.identifier = vid
 
         self._start()
         try:
+            # --- Check historical report reuse ---
+            historical = self.tracker.find_latest_completed_report(self.identifier)
+            if historical and Path(historical['file_path']).exists():
+                logger.info("Reusing existing report for %s: %s", self.identifier, historical['file_path'])
+                self.tracker.update_status(self.run_id, 'REUSED_EXISTING_REPORT', stage='done')
+                return {
+                    'reused': True,
+                    'report_file': Path(historical['file_path']),
+                    'github_url': historical.get('github_url'),
+                }
+
             # --- download ---
             self.current_stage = 'download'
             logger.info("[1/4] Fetching video information...")
@@ -196,8 +262,11 @@ class ProcessingPipeline:
 
             # --- upload ---
             report_file = summary_result.get('report_path')
+            prompt_info = summary_result.get('prompt_info')
+            
             self._set_stage('upload', 'SUMMARY_READY')
-            github_url = self._upload_report(report_file)
+            github_url = self._upload_report(report_file, uploader=video_info.get('uploader'))
+            self._upload_info_json(video_info)
 
             logger.info("[4/4] Processing complete!")
             self._complete(
@@ -206,6 +275,7 @@ class ProcessingPipeline:
                 report_path=report_file,
                 github_url=github_url,
                 audio_path=audio_path_used,
+                prompt_info=prompt_info,
             )
 
             return {
@@ -232,6 +302,17 @@ class ProcessingPipeline:
         """Run the full pipeline for a local MP3 file."""
         self._start()
         try:
+            # --- Check historical report reuse ---
+            historical = self.tracker.find_latest_completed_report(self.identifier)
+            if historical and Path(historical['file_path']).exists():
+                logger.info("Reusing existing report for %s: %s", self.identifier, historical['file_path'])
+                self.tracker.update_status(self.run_id, 'REUSED_EXISTING_REPORT', stage='done')
+                return {
+                    'reused': True,
+                    'report_file': Path(historical['file_path']),
+                    'github_url': historical.get('github_url'),
+                }
+
             logger.info("  File: %s (%.2f MB)", mp3_path.name, get_file_size_mb(mp3_path))
 
             # --- transcribe ---
@@ -264,8 +345,10 @@ class ProcessingPipeline:
 
             # --- upload ---
             report_file = summary_result.get('report_path')
+            prompt_info = summary_result.get('prompt_info')
+            
             self._set_stage('upload', 'SUMMARY_READY')
-            github_url = self._upload_report(report_file)
+            github_url = self._upload_report(report_file, uploader='Local Audio')
 
             logger.info("[3/3] Processing complete!")
             self._complete(
@@ -273,6 +356,7 @@ class ProcessingPipeline:
                 summary_path=summary_result.get('summary_path'),
                 report_path=report_file,
                 github_url=github_url,
+                prompt_info=prompt_info,
             )
 
             return {
@@ -304,6 +388,19 @@ class ProcessingPipeline:
         """
         self._start()
         try:
+            # --- Check historical report reuse ---
+            historical = self.tracker.find_latest_completed_report(self.identifier)
+            if historical and Path(historical['file_path']).exists():
+                logger.info("Reusing existing report for %s: %s", self.identifier, historical['file_path'])
+                self.tracker.update_status(self.run_id, 'REUSED_EXISTING_REPORT', stage='done')
+                if audio_path.exists() and not config.KEEP_AUDIO:
+                    audio_path.unlink()
+                return {
+                    'reused': True,
+                    'report_file': Path(historical['file_path']),
+                    'github_url': historical.get('github_url'),
+                }
+
             logger.info("  Audio: %s (%.2f MB)", audio_path, get_file_size_mb(audio_path))
 
             # --- transcribe ---
@@ -335,8 +432,11 @@ class ProcessingPipeline:
 
             # --- upload ---
             report_file = summary_result.get('report_path')
+            prompt_info = summary_result.get('prompt_info')
+            
             self._set_stage('upload', 'SUMMARY_READY')
-            github_url = self._upload_report(report_file)
+            github_url = self._upload_report(report_file, uploader=video_info.get('uploader', 'Unknown Podcast'))
+            self._upload_info_json(video_info)
 
             logger.info("[Done] Processing complete!")
             self._complete(
@@ -344,6 +444,7 @@ class ProcessingPipeline:
                 summary_path=summary_result.get('summary_path'),
                 report_path=report_file,
                 github_url=github_url,
+                prompt_info=prompt_info,
             )
 
             return {
@@ -441,12 +542,22 @@ class ProcessingPipeline:
                     video_url=video_url,
                 )
                 report_file = summary_result.get('report_path')
+                prompt_info = summary_result.get('prompt_info')
+                
                 tracker.update_status(run_id, 'SUMMARY_READY', stage='summarize')
-                tracker.update_artifacts(
-                    run_id,
-                    summary_path=str(summary_result.get('summary_path')),
-                    report_path=str(report_file) if report_file else None,
-                )
+                
+                updates = {
+                    "summary_path": str(summary_result.get('summary_path')),
+                    "report_path": str(report_file) if report_file else None,
+                }
+                if prompt_info:
+                    updates.update({
+                        "prompt_type": prompt_info.get("prompt_type"),
+                        "prompt_source": prompt_info.get("prompt_source"),
+                        "prompt_index": prompt_info.get("prompt_index"),
+                        "prompt_file": prompt_info.get("prompt_file"),
+                    })
+                tracker.update_artifacts(run_id, **updates)
             except Exception as e:
                 tracker.update_status(run_id, 'SUMMARIZE_FAILED', str(e), stage='summarize')
                 return {'error': str(e), 'run_id': run_id}
@@ -457,7 +568,10 @@ class ProcessingPipeline:
             if report_file.exists():
                 try:
                     tracker.update_status(run_id, 'UPLOADING', stage='upload')
-                    github_url = upload_to_github(report_file)
+                    # Find uploader from file_storage or just run
+                    # We can use a basic fallback wrapper
+                    run_info = tracker.get_run_info(run_id) or {}
+                    github_url = upload_to_github(report_file, uploader="Resumed")
                     tracker.update_status(run_id, 'COMPLETED', error_message=None, stage='done')
                     tracker.update_artifacts(run_id, github_url=github_url)
                     return {'success': True, 'run_id': run_id, 'github_url': github_url}
