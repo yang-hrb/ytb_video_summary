@@ -3,8 +3,12 @@ import zipfile
 import csv
 import json
 import sqlite3
+import logging
 from datetime import datetime
 from config import config
+
+logger = logging.getLogger(__name__)
+
 
 class ZipExporter:
     def __init__(self, db_path=None):
