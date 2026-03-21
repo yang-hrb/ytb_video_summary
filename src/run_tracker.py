@@ -130,6 +130,39 @@ class RunTracker:
                     """
                 )
 
+                # Phase 4: web_jobs table
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS web_jobs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        job_id TEXT NOT NULL UNIQUE,
+                        job_type TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        playlist_url TEXT,
+                        summary_style TEXT,
+                        total_count INTEGER DEFAULT 0,
+                        completed_count INTEGER DEFAULT 0,
+                        failed_count INTEGER DEFAULT 0,
+                        reused_count INTEGER DEFAULT 0,
+                        zip_path TEXT,
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL
+                    )
+                    """
+                )
+
+                # Phase 4: web_job_runs table
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS web_job_runs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        job_id TEXT NOT NULL,
+                        run_id INTEGER NOT NULL,
+                        created_at TIMESTAMP NOT NULL
+                    )
+                    """
+                )
+
                 cursor.execute("PRAGMA table_info(runs)")
                 columns = [row[1] for row in cursor.fetchall()]
 
