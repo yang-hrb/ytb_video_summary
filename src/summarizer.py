@@ -171,7 +171,7 @@ Please output in the following format:
 
         return prompt
 
-    def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 4096, custom_prompt: Optional[str] = None) -> tuple:
+    def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 8000, custom_prompt: Optional[str] = None) -> tuple:
         if custom_prompt:
             transcript_clean = self.clean_srt_content(transcript)
             prompt = f"{custom_prompt}\n\nVideo transcript:\n{transcript_clean}"

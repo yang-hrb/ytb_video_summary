@@ -31,8 +31,8 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
             FROM runs r
             LEFT JOIN file_storage f ON r.id = f.run_id AND f.file_type = 'report' AND f.deleted_at IS NULL
             WHERE r.status IN ('COMPLETED', 'REUSED_EXISTING_REPORT')
-              AND date(r.end_time) = ?
-            ORDER BY r.end_time DESC
+              AND date(r.updated_at) = ?
+            ORDER BY r.updated_at DESC
         """, (day_str,))
         
         runs = [dict(row) for row in cur.fetchall()]
