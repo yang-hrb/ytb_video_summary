@@ -5,7 +5,7 @@
 temp/
 logs/  # includes run_track.db and failure logs
 failure*.txt
-bin/*
+bin/
 
 # files
 *.db
@@ -15,7 +15,7 @@ bin/*
 *.opus
 *.srt
 *.log
-*.txt
+*.bak
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
