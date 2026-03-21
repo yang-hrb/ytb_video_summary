@@ -21,12 +21,22 @@
 │   ├── summarizer.py       # AI summarization
 │   └── utils.py            # Utilities
 ├── config/                 # Environment configuration
-│   └── settings.py         # Centralized config (Phase 3)
-├── tests/                  # unittest-based tests
+│   ├── settings.py         # Centralized config (Phase 3)
+│   ├── prompt_types/       # AI prompt templates
+│   └── prompt_profile_map.csv  # Uploader-to-prompt mapping
+├── tests/                  # unittest-based tests (40 tests)
+├── scripts/                # Shell scripts and diagnostics
+│   ├── quick-run.sh        # Quick single video processing
+│   ├── batch-run.sh        # Batch file processing
+│   ├── watch-run.sh        # Channel watcher daemon
+│   ├── dashboard.sh        # Web dashboard launcher
+│   ├── full_auto_run_*.sh  # Automated processing scripts
+│   └── diagnostics/        # Diagnostic utilities
 ├── doc/                    # Documentation
-├── output/                 # Generated artifacts
-├── logs/                   # Log files
-└── temp/                   # Temporary files
+├── web/                    # Web dashboard frontend
+├── output/                 # Generated artifacts (gitignored)
+├── logs/                   # Log files (gitignored)
+└── temp/                   # Temporary files (gitignored)
 ```
 
 ## Build, Test, and Development Commands
@@ -40,6 +50,9 @@ cp .env.example .env  # then set OPENROUTER_API_KEY
 # Run
 python src/main.py -video "URL"
 python src/main.py --help
+
+# Web Dashboard
+./scripts/dashboard.sh
 
 # Test
 python -m unittest discover tests
@@ -62,7 +75,7 @@ mypy src/ --ignore-missing-imports
 
 ### Phase 1: Stability
 - **Exception Hierarchy**: All exceptions inherit from `PipelineError`
-- **Database Layer**: Use `DatabaseManager` for unified DB access
+- **Database Layer**: Use `DatabaseManager` for unified DB access with WAL mode
 - **Error Handling**: No empty except blocks; always log errors
 
 ### Phase 2: Code Quality
@@ -71,16 +84,21 @@ mypy src/ --ignore-missing-imports
 - **Batch Processing**: Use `BatchProcessor` for any batch operations
 
 ### Phase 3: Maintainability
-- **Centralized Config**: All config in `config/settings.py`
+- **Centralized Config**: All config in `config/settings.py` with validation
 - **Console Output**: Use `src/cli/display.py` for user output
 - **Testing**: Maintain test coverage for new modules
+
+### Phase 4: Tooling
+- **Scripts**: All shell scripts in `scripts/` directory
+- **Diagnostics**: Diagnostic tools in `scripts/diagnostics/`
+- **Documentation**: Architecture decisions in `doc/`
 
 ## Testing Guidelines
 
 - Tests use the standard library `unittest` framework
 - Name new tests `tests/test_<topic>.py` and test methods `test_<behavior>`
 - Run individual tests with `python -m unittest tests.test_transcriber`
-- Current test count: 40 tests
+- Current test count: 40 tests (100% passing)
 
 ## Commit & Pull Request Guidelines
 
@@ -92,3 +110,4 @@ mypy src/ --ignore-missing-imports
 
 - Never commit `.env` or API keys; use `.env.example` as the template.
 - Generated files in `output/`, `logs/`, and `temp/` are local artifacts and should stay out of version control.
+- Cookies files (`cookies.txt`) contain sensitive data and are gitignored.
