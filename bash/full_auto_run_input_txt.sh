@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Full Auto YouTube Playlist Processor with GitHub Upload
-# This script processes a YouTube playlist and automatically uploads reports to GitHub
+# Full Auto Batch Processor for input.txt with GitHub Upload
+# This script processes YouTube video links from input.txt and uploads reports to GitHub if configured
 # No user confirmations required - uses default settings
 
 # Color definitions
@@ -15,8 +15,8 @@ NC='\033[0m' # No Color
 # Print colored message
 print_header() {
     echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║   Full Auto YouTube Playlist → GitHub Processor          ║${NC}"
-    echo -e "${CYAN}║   No confirmations - just provide URL and go!            ║${NC}"
+    echo -e "${CYAN}║   Full Auto input.txt → GitHub Processor                 ║${NC}"
+    echo -e "${CYAN}║   No confirmations - reads input.txt and goes!           ║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -79,41 +79,23 @@ check_github_config() {
     return 0
 }
 
-# Print header
-print_header
-
-# Get playlist URL (from argument or prompt)
-if [ -z "$1" ]; then
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}Enter YouTube Playlist URL${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "${CYAN}Paste your YouTube playlist URL:${NC}"
-    read playlist_url
-
-    if [ -z "$playlist_url" ]; then
-        echo ""
-        print_error "No URL provided!"
+# Check input file exists
+check_input_file() {
+    if [ ! -f "input.txt" ]; then
+        print_error "input.txt not found!"
+        print_info "Create input.txt with one YouTube URL per line"
         exit 1
     fi
-    echo ""
-else
-    playlist_url="$1"
-fi
+}
 
-# Validate URL
-if [[ ! "$playlist_url" =~ ^https?://(www\.)?(youtube\.com|youtu\.be) ]]; then
-    print_error "Invalid YouTube URL!"
-    exit 1
-fi
-
-print_info "Playlist URL: $playlist_url"
-echo ""
+# Print header
+print_header
 
 # Check prerequisites
 print_info "Checking prerequisites..."
 check_venv
 check_env
+check_input_file
 print_success "Prerequisites OK"
 echo ""
 
@@ -137,9 +119,10 @@ echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}Processing Settings${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo "  Input file: input.txt"
 echo "  Summary style: detailed (default)"
 echo "  GitHub upload: $([ "$github_enabled" = true ] && echo 'enabled' || echo 'disabled')"
-echo "  Cookies: cookies.txt only (no browser)"
+echo "  Cookies: auto-detect if available"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
@@ -159,12 +142,12 @@ fi
 
 # Start processing
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}Starting Playlist Processing${NC}"
+echo -e "${YELLOW}Starting Batch Processing${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
 # Run the main program with --upload flag if GitHub is configured
-python src/main.py -list "$playlist_url" --style detailed $cookies_param $upload_param
+python src/main.py --batch "input.txt" --style detailed $cookies_param $upload_param
 
 exit_code=$?
 
@@ -172,7 +155,7 @@ echo ""
 
 if [ $exit_code -eq 0 ]; then
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_success "Playlist processing completed successfully!"
+    print_success "Batch processing completed successfully!"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
@@ -183,7 +166,7 @@ if [ $exit_code -eq 0 ]; then
     fi
 else
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_error "Playlist processing failed!"
+    print_error "Batch processing failed!"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     print_info "Check the log file for details: youtube_summarizer.log"

@@ -16,9 +16,9 @@ class TestSummarizer(unittest.TestCase):
         summarizer = Summarizer(api_key="test_key")
         transcript = "这是一个测试转录文本"
         
-        prompt = summarizer.create_prompt(transcript, style="brief")
+        prompt = summarizer.create_prompt(transcript, style="brief", language="zh")
         
-        self.assertIn("简洁明了", prompt)
+        self.assertIn("简明扼要", prompt)
         self.assertIn(transcript, prompt)
         self.assertIn("关键要点", prompt)
     
@@ -27,11 +27,11 @@ class TestSummarizer(unittest.TestCase):
         summarizer = Summarizer(api_key="test_key")
         transcript = "这是一个测试转录文本"
         
-        prompt = summarizer.create_prompt(transcript, style="detailed")
+        prompt = summarizer.create_prompt(transcript, style="detailed", language="zh")
         
         self.assertIn("详细总结", prompt)
         self.assertIn(transcript, prompt)
-        self.assertIn("时间轴", prompt)
+        self.assertIn("时间线", prompt)
         self.assertIn("核心见解", prompt)
 
 

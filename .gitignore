@@ -5,7 +5,17 @@
 temp/
 logs/  # includes run_track.db and failure logs
 failure*.txt
+bin/*
 
+# files
+*.db
+*.mp3
+*.mp4
+*.wav
+*.opus
+*.srt
+*.log
+*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -227,3 +237,4 @@ youtube_summarizer.log
 .DS_Store
 logs/run_track.db
 input.txt
+logs/input_old_20260130.txt

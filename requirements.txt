@@ -1,19 +1,21 @@
 # Core
 yt-dlp>=2024.10.0
-openai-whisper>=20231117
 python-dotenv>=1.0.0
 
 # API
 requests>=2.31.0
-openai>=1.0.0  # For Perplexity API (also compatible with OpenRouter)
 feedparser>=6.0.0  # For Apple Podcasts RSS feed parsing
 
-# Audio Processing
-ffmpeg-python>=0.2.0
-
 # Utilities
-tqdm>=4.66.0
 colorama>=0.4.6
 
-# Optional: 更快的 Whisper
-# faster-whisper>=0.10.0
+# Whisper transcription — platform-conditional
+# Apple Silicon (M1/M2/M3): mlx-whisper uses Metal for much faster transcription
+mlx-whisper>=0.4.0; sys_platform == 'darwin' and platform_machine == 'arm64'
+# All other platforms: original openai-whisper
+openai-whisper>=20231117; sys_platform != 'darwin' or platform_machine != 'arm64'
+
+# Web Dashboard (Phase 4)
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.5.3

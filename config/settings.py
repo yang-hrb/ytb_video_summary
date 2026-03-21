@@ -1,4 +1,5 @@
 import os
+import platform
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -7,16 +8,13 @@ load_dotenv()
 class Config:
     """Configuration class - Manages all environment variables and path settings"""
 
-    # Summary API Configuration
-    SUMMARY_API = os.getenv('SUMMARY_API', 'OPENROUTER').upper()  # OPENROUTER or PERPLEXITY
-
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
-    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'deepseek/deepseek-r1') # Model name to use, it may not be free!
-
-    # Perplexity API
-    PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY', '')
-    PERPLEXITY_MODEL = os.getenv('PERPLEXITY_MODEL', 'sonar-pro')  # Perplexity model to use
+    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openrouter/free') # Model name to use, it may not be free!
+    MODEL_PRIORITY_1 = os.getenv('MODEL_PRIORITY_1', 'openrouter/free')
+    MODEL_PRIORITY_2 = os.getenv('MODEL_PRIORITY_2', 'openrouter/free')
+    MODEL_PRIORITY_3 = os.getenv('MODEL_PRIORITY_3', 'openrouter/free')
+    MODEL_FALLBACK = os.getenv('MODEL_FALLBACK', 'openrouter/free') # Fallback model
 
     # GitHub Integration (optional)
     GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
@@ -25,7 +23,20 @@ class Config:
 
     # Whisper
     WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base')
-    WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'zh')
+    WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', 'auto')  # auto lets Whisper detect the language
+    # 'auto' → mlx on Apple Silicon, openai-whisper everywhere else;
+    # set to 'mlx' or 'openai' to force a specific backend.
+    WHISPER_BACKEND = os.getenv('WHISPER_BACKEND', 'auto')
+
+    @staticmethod
+    def resolve_whisper_backend() -> str:
+        """Return the concrete backend name: 'mlx' or 'openai'."""
+        backend = Config.WHISPER_BACKEND.lower().strip()
+        if backend == 'auto':
+            if platform.system() == 'Darwin' and platform.machine() == 'arm64':
+                return 'mlx'
+            return 'openai'
+        return backend if backend in ('mlx', 'openai') else 'openai'
 
     # Audio
     AUDIO_QUALITY = os.getenv('AUDIO_QUALITY', '64')
@@ -49,7 +60,7 @@ class Config:
     LOG_DIR = BASE_DIR / 'logs'
     TRANSCRIPT_DIR = OUTPUT_DIR / 'transcripts'
     SUMMARY_DIR = OUTPUT_DIR / 'summaries'
-    REPORT_DIR = OUTPUT_DIR / 'reports'
+    REPORT_DIR = OUTPUT_DIR / 'summary'
 
     def __init__(self):
         """Initialize and automatically create necessary directories"""
@@ -62,14 +73,8 @@ class Config:
 
     def validate(self):
         """Validate that required configuration is set"""
-        if self.SUMMARY_API == 'OPENROUTER':
-            if not self.OPENROUTER_API_KEY:
-                raise ValueError("OPENROUTER_API_KEY is not set in .env file")
-        elif self.SUMMARY_API == 'PERPLEXITY':
-            if not self.PERPLEXITY_API_KEY:
-                raise ValueError("PERPLEXITY_API_KEY is not set in .env file")
-        else:
-            raise ValueError(f"Invalid SUMMARY_API value: {self.SUMMARY_API}. Must be 'OPENROUTER' or 'PERPLEXITY'")
+        if not self.OPENROUTER_API_KEY:
+            raise ValueError("Set OPENROUTER_API_KEY in .env file")
         return True
 
 config = Config()

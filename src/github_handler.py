@@ -3,6 +3,7 @@ import base64
 from pathlib import Path
 from typing import Optional
 import logging
+from datetime import datetime
 
 from config import config
 
@@ -118,13 +119,15 @@ class GitHubHandler:
             raise
 
 
-def upload_to_github(file_path: Path, remote_folder: str = "reports") -> Optional[str]:
+def upload_to_github(file_path: Path, remote_folder: str = "summary", uploader: Optional[str] = None, use_month_folder: bool = True) -> Optional[str]:
     """
     Upload a file to GitHub repository (convenience function)
 
     Args:
         file_path: Local file path
-        remote_folder: Folder in repository (default: reports)
+        remote_folder: Folder in repository (default: summary)
+        uploader: Uploader name for folder structure
+        use_month_folder: Whether to place inside a YYYY_MM subfolder
 
     Returns:
         File URL in GitHub, or None if GitHub is not configured
@@ -136,7 +139,16 @@ def upload_to_github(file_path: Path, remote_folder: str = "reports") -> Optiona
 
     try:
         handler = GitHubHandler()
-        remote_path = f"{remote_folder}/{file_path.name}"
+        month_part = f"{datetime.now().strftime('%Y_%m')}/" if use_month_folder else ""
+        
+        if uploader:
+            from .utils import sanitize_filename
+            clean_up = sanitize_filename(uploader, max_length=50)
+            remote_path = f"{remote_folder}/{clean_up}/{month_part}{file_path.name}"
+        else:
+            base_folder = "misc" if use_month_folder else "misc/"
+            remote_path = f"{remote_folder}/{base_folder}/{month_part}{file_path.name}".replace("//", "/")
+            
         url = handler.upload_file(file_path, remote_path)
         return url
     except Exception as e:

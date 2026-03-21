@@ -25,10 +25,10 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
     Returns:
         Sanitized filename
     """
-    # Remove illegal characters
-    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
-    # Remove extra spaces
-    filename = re.sub(r'\s+', ' ', filename).strip()
+    # Keep only Chinese characters, English letters, digits, and spaces
+    filename = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9\s]', '', filename)
+    # Replace one or more spaces with a single underscore, and strip ends
+    filename = re.sub(r'\s+', '_', filename).strip('_')
     # Limit length
     if len(filename) > max_length:
         filename = filename[:max_length]
@@ -63,7 +63,7 @@ def extract_summary_title(summary: str, max_length: int = 50) -> str:
     return "summary"
 
 
-def create_report_filename(video_title: str, uploader: str = "", summary: str = "", is_local_mp3: bool = False) -> str:
+def create_report_filename(video_title: str, uploader: str = "", upload_date: str = "", summary: str = "", is_local_mp3: bool = False) -> str:
     """
     Create report filename
 
@@ -73,33 +73,28 @@ def create_report_filename(video_title: str, uploader: str = "", summary: str = 
     Args:
         video_title: Video title (or MP3 filename without extension)
         uploader: Uploader name (first 10 characters)
+        upload_date: The video's upload date (YYYYMMDD) or similar timestamp
         summary: Summary content (for generating content-related title)
         is_local_mp3: True if processing local MP3 file
 
     Returns:
         Formatted filename
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    timestamp = upload_date or datetime.now().strftime("%Y%m%d")
 
     # Special format for local MP3 files: timestamp_mp3_filename.md
     if is_local_mp3:
         clean_filename = sanitize_filename(video_title, max_length=100)
-        return f"{timestamp}_mp3_{clean_filename}.md"
+        return f"{datetime.now().strftime('%Y%m%d_%H%M')}_mp3_{clean_filename}.md"
 
     # Standard format for videos: timestamp_uploader_content-title.md
-    # Process uploader name (first 10 characters)
     uploader_part = ""
     if uploader:
-        clean_uploader = sanitize_filename(uploader, max_length=10)
+        clean_uploader = sanitize_filename(uploader, max_length=15)
         if clean_uploader:
             uploader_part = f"{clean_uploader}_"
 
-    # Extract title from summary content
-    if summary:
-        content_title = extract_summary_title(summary, max_length=50)
-    else:
-        # Use video title if no summary
-        content_title = sanitize_filename(video_title, max_length=50)
+    content_title = sanitize_filename(video_title, max_length=20)
 
     return f"{timestamp}_{uploader_part}{content_title}.md"
 
@@ -114,10 +109,12 @@ def format_duration(seconds: int) -> str:
     Returns:
         Formatted duration (HH:MM:SS or MM:SS)
     """
-    duration = timedelta(seconds=seconds)
-    hours = duration.seconds // 3600
-    minutes = (duration.seconds % 3600) // 60
-    secs = duration.seconds % 60
+    # Use total_seconds() to correctly handle durations > 24 hours
+    # (timedelta.seconds wraps around at 86400, causing incorrect results for long streams)
+    total = int(timedelta(seconds=seconds).total_seconds())
+    hours = total // 3600
+    minutes = (total % 3600) // 60
+    secs = total % 60
 
     if hours > 0:
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
@@ -143,26 +140,8 @@ def format_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
-def clean_temp_files(temp_dir: Path, keep_pattern: Optional[str] = None):
-    """
-    Clean temporary files
-
-    Args:
-        temp_dir: Temporary files directory
-        keep_pattern: Pattern for files to keep (regex)
-    """
-    if not temp_dir.exists():
-        return
-
-    for file in temp_dir.iterdir():
-        if file.is_file():
-            if keep_pattern and re.match(keep_pattern, file.name):
-                continue
-            try:
-                file.unlink()
-                logger.info(f"Deleted temp file: {file.name}")
-            except Exception as e:
-                logger.error(f"Failed to delete {file.name}: {e}")
+# clean_temp_files() removed — audio cleanup is done inline via audio_path.unlink()
+# ensure_dir_exists() removed — directory creation is handled centrally by Config.__init__()
 
 
 def get_file_size_mb(file_path: Path) -> float:
@@ -270,14 +249,7 @@ def create_summary_header(title: str, duration: str, timestamp: Optional[str] = 
     return header
 
 
-def ensure_dir_exists(directory: Path):
-    """
-    Ensure directory exists, create if it doesn't
 
-    Args:
-        directory: Directory path
-    """
-    directory.mkdir(parents=True, exist_ok=True)
 
 
 def find_ffmpeg_location() -> Optional[str]:
@@ -332,21 +304,4 @@ def is_apple_podcasts_url(url: str) -> bool:
     return bool(re.search(r'podcasts\.apple\.com', url))
 
 
-def extract_podcast_id(url: str) -> Optional[str]:
-    """
-    Extract podcast ID from Apple Podcasts URL
-
-    URL formats:
-    - https://podcasts.apple.com/us/podcast/podcast-name/id1234567890
-    - https://podcasts.apple.com/podcast/id1234567890
-
-    Args:
-        url: Apple Podcasts URL
-
-    Returns:
-        Podcast ID or None
-    """
-    match = re.search(r'/id(\d+)', url)
-    if match:
-        return match.group(1)
-    return None
+# extract_podcast_id() removed — duplicated by ApplePodcastsHandler.extract_podcast_id()

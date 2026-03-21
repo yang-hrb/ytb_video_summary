@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTB Video Summary Dashboard</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; margin-top: 10px; color: #0066cc; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge.completed { background-color: #d4edda; color: #155724; }
+        .badge.failed { background-color: #f8d7da; color: #721c24; }
+        .badge.reused { background-color: #cce5ff; color: #004085; }
+        button, input, select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; margin-right: 10px; }
+        button { background-color: #0066cc; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0052a3; }
+        .search-bar { display: flex; margin-bottom: 20px; }
+        .search-bar input { flex-grow: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard</h1>
+        
+        <div class="stats-grid">
+            <div class="stat-card"><h3>Total Processed</h3><div class="stat-value" id="stat-total">0</div></div>
+            <div class="stat-card"><h3>Completed</h3><div class="stat-value" id="stat-completed">0</div></div>
+            <div class="stat-card"><h3>Failed</h3><div class="stat-value" id="stat-failed">0</div></div>
+            <div class="stat-card"><h3>Reused</h3><div class="stat-value" id="stat-reused">0</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Submit New Job</h2>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" id="playlist-url" placeholder="Playlist/Video URL" style="flex-grow: 1;">
+                <button onclick="submitJob()">Start Processing</button>
+            </div>
+            <div id="job-status" style="margin-top: 10px; font-weight: bold; color: green;"></div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Batch Jobs & Zip Bundles</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Input Details</th>
+                        <th>Status</th>
+                        <th>Started At</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="jobs-table-body">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Recent Runs</h2>
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Search by identifier or URL...">
+                <button onclick="loadRuns()">Search</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Identifier / URL</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Started At</th>
+                        <th>Updated At</th>
+                    </tr>
+                </thead>
+                <tbody id="runs-table-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const dotIndex = dateStr.indexOf('.');
+            return (dotIndex !== -1) ? dateStr.substring(0, dotIndex) : dateStr;
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                document.getElementById('stat-total').innerText = data.total || 0;
+                document.getElementById('stat-completed').innerText = data.completed || 0;
+                document.getElementById('stat-failed').innerText = data.failed || 0;
+                document.getElementById('stat-reused').innerText = data.reused || 0;
+            } catch (e) { console.error('Error loading stats:', e); }
+        }
+
+        async function loadJobs() {
+            try {
+                const res = await fetch('/api/jobs');
+                const data = await res.json();
+                const tbody = document.getElementById('jobs-table-body');
+                tbody.innerHTML = '';
+                
+                if (data.items) {
+                    data.items.forEach(job => {
+                        const tr = document.createElement('tr');
+                        let badgeClass = '';
+                        if (job.status === 'completed') badgeClass = 'completed';
+                        else if (job.status === 'failed') badgeClass = 'failed';
+                        
+                        let actionBtn = '';
+                        if (job.status === 'completed' && job.zip_path) {
+                            actionBtn = `<a href="/api/jobs/${job.job_id}/zip" target="_blank" style="text-decoration:none;">
+                                <button style="background-color:#28a745; padding:5px 10px; font-size:12px;">Download ZIP</button>
+                            </a>`;
+                        } else if (job.status === 'running') {
+                            actionBtn = `<span style="font-size:12px; color:#666;">Processing...</span>`;
+                        }
+
+                        tr.innerHTML = `
+                            <td>${job.job_id}</td>
+                            <td title="${job.playlist_url}">${job.playlist_url.substring(0, 40)}${job.playlist_url.length > 40 ? '...' : ''}</td>
+                            <td><span class="badge ${badgeClass}">${job.status.toUpperCase()}</span></td>
+                            <td>${formatDate(job.created_at)}</td>
+                            <td>${actionBtn}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (e) { console.error('Error loading jobs:', e); }
+        }
+
+        async function loadRuns() {
+            const search = document.getElementById('search-input').value;
+            let url = '/api/runs?page=1&page_size=20';
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+            
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                const tbody = document.getElementById('runs-table-body');
+                tbody.innerHTML = '';
+                
+                if (data.items) {
+                    data.items.forEach(run => {
+                        const tr = document.createElement('tr');
+                        let badgeClass = '';
+                        if (run.status === 'COMPLETED') badgeClass = 'completed';
+                        else if (run.status.includes('FAILED')) badgeClass = 'failed';
+                        else if (run.status.includes('REUSED')) badgeClass = 'reused';
+
+                        tr.innerHTML = `
+                            <td title="${run.url_or_path}">${run.identifier || run.url_or_path.substring(0, 30)}...</td>
+                            <td>${run.type}</td>
+                            <td><span class="badge ${badgeClass}">${run.status}</span></td>
+                            <td>${formatDate(run.started_at)}</td>
+                            <td>${formatDate(run.updated_at)}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (e) { console.error('Error loading runs:', e); }
+        }
+
+        async function submitJob() {
+            const url = document.getElementById('playlist-url').value;
+            if (!url) return alert('Please enter a URL');
+            
+            try {
+                const res = await fetch('/api/jobs/playlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playlist_url: url })
+                });
+                const data = await res.json();
+                document.getElementById('job-status').innerText = `Job submitted successfully! Job ID: ${data.job_id}`;
+                document.getElementById('playlist-url').value = '';
+                
+                // Refresh jobs automatically
+                setTimeout(loadJobs, 1000);
+            } catch (e) {
+                alert('Error submitting job');
+            }
+        }
+
+        loadStats();
+        loadJobs();
+        loadRuns();
+    </script>
+</body>
+</html>
