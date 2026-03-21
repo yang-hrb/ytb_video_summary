@@ -1,10 +1,11 @@
 import logging
-import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from config import config
+from src.database import DatabaseManager
+from src.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class RunTracker:
 
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or config.LOG_DIR / "run_track.db"
+        self.db = DatabaseManager(self.db_path)
         self._init_database()
 
     # Phase-2 columns added to existing runs table
@@ -38,7 +40,7 @@ class RunTracker:
 
     def _init_database(self):
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
@@ -187,45 +189,37 @@ class RunTracker:
     def start_run(self, run_type: str, url_or_path: str, identifier: str) -> int:
         now = datetime.now()
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO runs (type, url_or_path, identifier, status, stage, started_at, updated_at)
-                    VALUES (?, ?, ?, 'PENDING', 'INIT', ?, ?)
-                    """,
-                    (run_type, url_or_path, identifier, now, now),
-                )
-                conn.commit()
-                run_id = cursor.lastrowid
-                logger.info("Started tracking run %s: %s - %s", run_id, run_type, identifier)
-                return run_id
-        except Exception as e:
+            run_id = self.db.execute_insert(
+                """
+                INSERT INTO runs (type, url_or_path, identifier, status, stage, started_at, updated_at)
+                VALUES (?, ?, ?, 'PENDING', 'INIT', ?, ?)
+                """,
+                (run_type, url_or_path, identifier, now, now),
+            )
+            logger.info("Started tracking run %s: %s - %s", run_id, run_type, identifier)
+            return run_id
+        except DatabaseError as e:
             logger.error("Failed to start run tracking: %s", e)
             raise
 
     def update_status(self, run_id: int, status: str, error_message: Optional[str] = None, stage: Optional[str] = None):
         now = datetime.now()
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
+            set_clause = "status = ?, updated_at = ?"
+            params: List = [status, now]
 
-                set_clause = "status = ?, updated_at = ?"
-                params: List = [status, now]
+            if stage is not None:
+                set_clause += ", stage = ?"
+                params.append(stage)
 
-                if stage is not None:
-                    set_clause += ", stage = ?"
-                    params.append(stage)
+            if error_message is not None:
+                set_clause += ", error_message = ?"
+                params.append(error_message)
 
-                if error_message is not None:
-                    set_clause += ", error_message = ?"
-                    params.append(error_message)
-
-                params.append(run_id)
-                cursor.execute(f"UPDATE runs SET {set_clause} WHERE id = ?", tuple(params))
-                conn.commit()
-                logger.debug("Updated run %s status to: %s", run_id, status)
-        except Exception as e:
+            params.append(run_id)
+            self.db.execute_update(f"UPDATE runs SET {set_clause} WHERE id = ?", tuple(params))
+            logger.debug("Updated run %s status to: %s", run_id, status)
+        except DatabaseError as e:
             logger.error("Failed to update run status: %s", e)
             raise
 
@@ -249,43 +243,28 @@ class RunTracker:
         set_clause += ", updated_at = ?"
         params = list(updates.values()) + [now, run_id]
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute(
-                    f"UPDATE runs SET {set_clause} WHERE id = ?", params
-                )
-                conn.commit()
-                logger.debug("Updated artifacts for run %s: %s", run_id, list(updates))
-        except Exception as e:
+            self.db.execute_update(f"UPDATE runs SET {set_clause} WHERE id = ?", tuple(params))
+            logger.debug("Updated artifacts for run %s: %s", run_id, list(updates))
+        except DatabaseError as e:
             logger.error("Failed to update artifacts for run %s: %s", run_id, e)
             raise
 
     def increment_retry(self, run_id: int):
-        """Increment the retry_count for a run by 1."""
         now = datetime.now()
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute(
-                    "UPDATE runs SET retry_count = COALESCE(retry_count, 0) + 1, "
-                    "updated_at = ? WHERE id = ?",
-                    (now, run_id),
-                )
-                conn.commit()
-                logger.debug("Incremented retry_count for run %s", run_id)
-        except Exception as e:
+            self.db.execute_update(
+                "UPDATE runs SET retry_count = COALESCE(retry_count, 0) + 1, updated_at = ? WHERE id = ?",
+                (now, run_id),
+            )
+            logger.debug("Incremented retry_count for run %s", run_id)
+        except DatabaseError as e:
             logger.error("Failed to increment retry count for run %s: %s", run_id, e)
             raise
 
     def get_run_info(self, run_id: int) -> Optional[Dict]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM runs WHERE id = ?", (run_id,))
-                row = cursor.fetchone()
-                if row:
-                    return dict(row)
-                return None
-        except Exception as e:
+            return self.db.execute_one("SELECT * FROM runs WHERE id = ?", (run_id,))
+        except DatabaseError as e:
             logger.error("Failed to get run info: %s", e)
             return None
 
@@ -302,86 +281,47 @@ class RunTracker:
     }
 
     def get_resumable_runs(self, statuses: Optional[List[str]] = None) -> list:
-        """Return runs that can be resumed from a mid-pipeline stage.
-
-        Args:
-            statuses: Explicit list of statuses to query.  Defaults to all keys
-                      in RESUMABLE_STATUS_MAP.
-        """
         statuses = statuses or list(self.RESUMABLE_STATUS_MAP.keys())
         placeholders = ",".join("?" for _ in statuses)
-
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute(
-                    f"""
-                    SELECT * FROM runs
-                    WHERE status IN ({placeholders})
-                    ORDER BY updated_at ASC
-                    """,
-                    tuple(statuses),
-                )
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
-        except Exception as e:
+            return self.db.execute(
+                f"SELECT * FROM runs WHERE status IN ({placeholders}) ORDER BY updated_at ASC",
+                tuple(statuses),
+            )
+        except DatabaseError as e:
             logger.error("Failed to get resumable runs: %s", e)
             return []
 
     def get_failed_runs(self, limit: Optional[int] = None) -> list:
-        """Return runs in any failed status."""
         failed_statuses = (
             'DOWNLOAD_FAILED', 'TRANSCRIBE_FAILED',
-            'SUMMARIZE_FAILED', 'SUMMARY_FAILED',  # legacy
+            'SUMMARIZE_FAILED', 'SUMMARY_FAILED',
             'UPLOAD_FAILED', 'failed',
         )
         placeholders = ",".join("?" for _ in failed_statuses)
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                query = (
-                    f"SELECT * FROM runs WHERE status IN ({placeholders}) "
-                    "ORDER BY started_at DESC"
-                )
-                if limit:
-                    query += f" LIMIT {limit}"
-                cursor.execute(query, failed_statuses)
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
-        except Exception as e:
+            query = f"SELECT * FROM runs WHERE status IN ({placeholders}) ORDER BY started_at DESC"
+            if limit:
+                query += f" LIMIT {limit}"
+            return self.db.execute(query, failed_statuses)
+        except DatabaseError as e:
             logger.error("Failed to get failed runs: %s", e)
             return []
 
     def get_stats(self) -> Dict:
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    SELECT status, COUNT(*) as count
-                    FROM runs
-                    GROUP BY status
-                    """
-                )
-                status_counts = {row[0]: row[1] for row in cursor.fetchall()}
+            status_rows = self.db.execute("SELECT status, COUNT(*) as count FROM runs GROUP BY status")
+            status_counts = {row['status']: row['count'] for row in status_rows}
 
-                cursor.execute(
-                    """
-                    SELECT type, COUNT(*) as count
-                    FROM runs
-                    GROUP BY type
-                    """
-                )
-                type_counts = {row[0]: row[1] for row in cursor.fetchall()}
+            type_rows = self.db.execute("SELECT type, COUNT(*) as count FROM runs GROUP BY type")
+            type_counts = {row['type']: row['count'] for row in type_rows}
 
-                return {
-                    "by_status": status_counts,
-                    "by_type": type_counts,
-                    "total": sum(status_counts.values()),
-                }
-        except Exception as e:
+            return {
+                "by_status": status_counts,
+                "by_type": type_counts,
+                "total": sum(status_counts.values()),
+            }
+        except DatabaseError as e:
             logger.error("Failed to get stats: %s", e)
             return {"by_status": {}, "by_type": {}, "total": 0}
 
@@ -390,58 +330,46 @@ class RunTracker:
     # ------------------------------------------------------------------
     def register_file(self, run_id: int, file_type: str, file_path: str, file_size: Optional[int] = None, github_url: Optional[str] = None) -> int:
         now = datetime.now()
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO file_storage (run_id, file_type, file_path, file_size, github_url, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (run_id, file_type, file_path, file_size, github_url, now, now)
-            )
-            conn.commit()
-            return cursor.lastrowid
-            
+        return self.db.execute_insert(
+            """
+            INSERT INTO file_storage (run_id, file_type, file_path, file_size, github_url, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (run_id, file_type, file_path, file_size, github_url, now, now)
+        )
+
     def get_files_for_run(self, run_id: int, file_type: Optional[str] = None) -> List[dict]:
         query = "SELECT * FROM file_storage WHERE run_id = ? AND deleted_at IS NULL"
-        params = [run_id]
+        params: list = [run_id]
         if file_type:
             query += " AND file_type = ?"
             params.append(file_type)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
-            
+        return self.db.execute(query, tuple(params))
+
     def mark_file_deleted(self, file_storage_id: int):
         now = datetime.now()
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("UPDATE file_storage SET deleted_at = ?, updated_at = ? WHERE id = ?", (now, now, file_storage_id))
-            conn.commit()
-            
+        self.db.execute_update(
+            "UPDATE file_storage SET deleted_at = ?, updated_at = ? WHERE id = ?",
+            (now, now, file_storage_id)
+        )
+
     def update_file_github_url(self, file_storage_id: int, github_url: str):
         now = datetime.now()
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("UPDATE file_storage SET github_url = ?, updated_at = ? WHERE id = ?", (github_url, now, file_storage_id))
-            conn.commit()
-            
+        self.db.execute_update(
+            "UPDATE file_storage SET github_url = ?, updated_at = ? WHERE id = ?",
+            (github_url, now, file_storage_id)
+        )
+
     def find_latest_completed_report(self, identifier: str) -> Optional[dict]:
-        # find the latest completed run with this identifier that has a report
         query = """
-        SELECT fs.*, r.id as r_id 
+        SELECT fs.*, r.id as r_id
         FROM runs r
         JOIN file_storage fs ON r.id = fs.run_id
-        WHERE r.identifier = ? AND r.status = 'COMPLETED' 
+        WHERE r.identifier = ? AND r.status = 'COMPLETED'
           AND fs.file_type = 'report' AND fs.deleted_at IS NULL
         ORDER BY r.updated_at DESC LIMIT 1
         """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(query, (identifier,))
-            row = cursor.fetchone()
-            if row:
-                return dict(row)
-        return None
+        return self.db.execute_one(query, (identifier,))
 
 
 # Module-level variable: same process reuses the same failure log file for the entire session.

@@ -162,8 +162,9 @@ class ApplePodcastsHandler:
                             duration = int(parts[0]) * 60 + int(parts[1])
                     else:
                         duration = int(itunes_duration)
-                except:
-                    pass
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.debug(f"Could not parse duration '{itunes_duration}': {e}")
+                    duration = 0
 
             # Extract upload_date (YYYYMMDD)
             upload_date = ''
