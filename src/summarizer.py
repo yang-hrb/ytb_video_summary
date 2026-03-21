@@ -221,8 +221,8 @@ Please output in the following format:
                             logger.warning("OpenRouter model %s exhausted retries, switching to next model.", model_name)
                             break
                         raise
-                    except Exception:
-                        logger.warning("OpenRouter model %s parsing failed, switching model.", model_name)
+                    except (ValueError, KeyError, TypeError) as e:
+                        logger.warning("OpenRouter model %s parsing failed: %s, switching model.", model_name, e)
                         break
 
         raise RuntimeError("All OpenRouter models failed")

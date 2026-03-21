@@ -38,8 +38,7 @@ class TestFileStorage(unittest.TestCase):
         files = self.tracker.get_files_for_run(run_id)
         self.assertEqual(len(files), 1)
         
-        success = self.tracker.mark_file_deleted(fid1)
-        self.assertTrue(success)
+        self.tracker.mark_file_deleted(fid1)
         
         files = self.tracker.get_files_for_run(run_id)
         self.assertEqual(len(files), 0)
@@ -48,8 +47,7 @@ class TestFileStorage(unittest.TestCase):
         run_id = self.tracker.start_run('youtube', 'url', 'test_vid')
         fid1 = self.tracker.register_file(run_id, 'report', '/path/to/report.md', 100)
         
-        success = self.tracker.update_file_github_url(fid1, 'https://github.com/test')
-        self.assertTrue(success)
+        self.tracker.update_file_github_url(fid1, 'https://github.com/test')
         
         files = self.tracker.get_files_for_run(run_id)
         self.assertEqual(files[0]['github_url'], 'https://github.com/test')

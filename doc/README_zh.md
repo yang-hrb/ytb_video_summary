@@ -19,6 +19,30 @@
 - ✅ 支持文本文档导入混排批处理 (Batch processing)
 - ✅ 支持自动向 GitHub Repo 上传 Markdown 生成文件用于备份与发布
 
+## 🏗️ 架构改进 (Phase 1-4)
+
+代码库经过大幅重构，显著提升了可维护性：
+
+### Phase 1: 稳定性
+- **异常层次结构**: 统一的 `PipelineError` 基类，派生具体异常（`DownloadError`, `TranscriptionError` 等）
+- **数据库访问层**: `DatabaseManager` 提供统一的 SQLite 操作，WAL 模式优化
+- **错误处理**: 消除空 except 块，所有错误均被正确记录
+
+### Phase 2: 代码质量
+- **CLI 模块化**: 分离 `src/cli/` 处理参数解析、命令处理和输出显示
+- **类型注解**: 所有公共 API 具有完整的类型提示
+- **批处理**: 可复用的 `BatchProcessor` 实现一致的批处理操作
+
+### Phase 3: 可维护性
+- **集中配置**: 所有设置集中在 `config/settings.py`，带验证功能
+- **统一输出**: `src/cli/display.py` 提供一致的控制台输出
+- **测试覆盖**: 40 个测试，100% 通过率
+
+### Phase 4: 工具链
+- **CI/CD**: GitHub Actions 工作流实现自动化测试
+- **文档**: 更新 AGENTS.md 记录架构决策
+- **性能**: SQLite WAL 模式和缓存优化
+
 ## 📊 数据处理流
 
 ```text

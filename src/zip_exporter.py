@@ -3,8 +3,12 @@ import zipfile
 import csv
 import json
 import sqlite3
+import logging
 from datetime import datetime
 from config import config
+
+logger = logging.getLogger(__name__)
+
 
 class ZipExporter:
     def __init__(self, db_path=None):
@@ -78,7 +82,9 @@ class ZipExporter:
                                     zipf.write(fd["file_path"], arcname=f"reports/{os.path.basename(fd['file_path'])}")
                                 elif fd["file_type"] == "transcript":
                                     zipf.write(fd["file_path"], arcname=f"transcripts/{os.path.basename(fd['file_path'])}")
-                    except Exception:
-                        pass # if file_storage doesn't exist or similar
+                    except sqlite3.OperationalError as e:
+                        logger.debug(f"file_storage table not available for run {run['id']}: {e}")
+                    except (KeyError, OSError) as e:
+                        logger.warning(f"Error processing files for run {run['id']}: {e}")
 
         return zip_path
