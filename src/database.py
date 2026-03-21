@@ -32,20 +32,13 @@ class DatabaseManager:
 
     @contextmanager
     def get_connection(self, row_factory: bool = False):
-        """获取数据库连接的上下文管理器
-
-        Args:
-            row_factory: 是否启用Row factory（允许按列名访问）
-
-        Yields:
-            sqlite3.Connection: 数据库连接
-
-        Raises:
-            DatabaseError: 连接失败时
-        """
         conn = None
         try:
             conn = sqlite3.connect(self.db_path)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=-2000")
+            conn.execute("PRAGMA foreign_keys=ON")
             if row_factory:
                 conn.row_factory = sqlite3.Row
             yield conn
@@ -93,21 +86,9 @@ class DatabaseManager:
         return results[0] if results else None
 
     def execute_insert(self, query: str, params: Tuple = ()) -> int:
-        """执行插入操作并返回新行ID
-
-        Args:
-            query: INSERT语句
-            params: 插入参数
-
-        Returns:
-            新插入行的ID
-
-        Raises:
-            DatabaseError: 插入失败时
-        """
         with self.get_connection() as conn:
             cursor = conn.execute(query, params)
-            return cursor.lastrowid
+            return cursor.lastrowid or 0
 
     def execute_update(self, query: str, params: Tuple = ()) -> int:
         """执行更新操作并返回影响的行数
