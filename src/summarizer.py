@@ -318,5 +318,6 @@ def summarize_transcript(transcript: str, video_id: str,
     return {
         'summary_path': summary_path,
         'report_path': report_path,
-        'prompt_info': selection
+        'prompt_info': selection,
+        'model_used': model_used
     }

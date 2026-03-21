@@ -60,15 +60,52 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
         video_id = r.get('identifier', '')
         filename = ""
         gurl = r.get('github_url')
-        if r.get('file_path'):
-            filename = Path(r['file_path']).stem
         
-        uploader, title = "Unknown", filename
-        parts = filename.split('_', 2)
-        if len(parts) >= 3:
-            uploader, title = parts[1], parts[2]
+        uploader = "Unknown"
+        title = ""
+        model = r.get('model_used')
+
+        if r.get('file_path') and Path(r['file_path']).exists():
+            fpath = Path(r['file_path'])
+            filename = fpath.stem
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    if lines and lines[0].startswith('# '):
+                        title = lines[0][2:].strip()
+                    
+                    if not model:
+                        for bline in reversed(lines[-20:]):
+                            if "**AI Model**:" in bline:
+                                model = bline.split('**AI Model**:')[-1].strip().strip('`').strip()
+                                break
+            except Exception:
+                pass
+                
+        if not title and filename:
+            title = filename
+        
+        if filename:
+            from src.utils import sanitize_filename
+            clean_t = sanitize_filename(title, max_length=20)
+            f_rest = filename
+            parts = filename.split('_', 1)
+            if len(parts) == 2 and len(parts[0]) == 8 and parts[0].isdigit():
+                f_rest = parts[1]
+                
+            if f_rest.endswith(clean_t) and f_rest != clean_t:
+                uploader_part = f_rest[:-len(clean_t)]
+                uploader = uploader_part.rstrip('_').replace('_', ' ')
+            else:
+                pieces = f_rest.split('_', 1)
+                if len(pieces) > 1:
+                    uploader = pieces[0]
+                else:
+                    uploader = "Unknown"
+
+        if not model:
+            model = 'N/A'
             
-        model = r.get('model_used') or 'N/A'
         link = f"[Report]({gurl})" if gurl else (filename if filename else video_id)
         
         row_str = f"| {uploader} | {title} | {model} | {link} |"
@@ -88,7 +125,7 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
             from src.github_handler import upload_to_github
             remote_url = upload_to_github(
                 report_file, 
-                remote_folder="summary/daily_digest", 
+                remote_folder="daily_digest", 
                 use_month_folder=True
             )
             logger.info(f"Daily summary uploaded: {remote_url}")

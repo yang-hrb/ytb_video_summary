@@ -276,6 +276,7 @@ class ProcessingPipeline:
                 github_url=github_url,
                 audio_path=audio_path_used,
                 prompt_info=prompt_info,
+                model_used=summary_result.get('model_used'),
             )
 
             return {
@@ -357,6 +358,7 @@ class ProcessingPipeline:
                 report_path=report_file,
                 github_url=github_url,
                 prompt_info=prompt_info,
+                model_used=summary_result.get('model_used'),
             )
 
             return {
@@ -445,6 +447,7 @@ class ProcessingPipeline:
                 report_path=report_file,
                 github_url=github_url,
                 prompt_info=prompt_info,
+                model_used=summary_result.get('model_used'),
             )
 
             return {
@@ -557,6 +560,10 @@ class ProcessingPipeline:
                         "prompt_index": prompt_info.get("prompt_index"),
                         "prompt_file": prompt_info.get("prompt_file"),
                     })
+                model_used = summary_result.get('model_used')
+                if model_used:
+                    updates["model_used"] = model_used
+
                 tracker.update_artifacts(run_id, **updates)
             except Exception as e:
                 tracker.update_status(run_id, 'SUMMARIZE_FAILED', str(e), stage='summarize')

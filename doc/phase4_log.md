@@ -39,3 +39,40 @@
 
 1. **内网映射 / 挂网防御**: 若外网正式上线暴露需要补齐 Uvicorn Nginx 反代并套用基于请求防洪、及账号凭夹如 Basic Auth 验证手段。  
 2. **Key 生命周期追踪**: 当前方案中前台输入的调用 API Key 直接以环境变量临时封装注入到调用的 Popen 虚拟 Shell 中，未明文暂存落地硬盘以保障秘钥高度机密，通过合规安全点检查校验。
+
+## 4. Phase 4 使用指南 (How to use)
+
+### 4.1 如何启动 Dashboard Web 面板
+
+1. **激活虚拟环境与依赖项**（确保 `fastapi` 和 `uvicorn` 等库已安装）：
+   ```bash
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+2. **启动 Dashboard 界面**：
+   在仓库根目录直接运行提供的快捷脚本（脚本内部会自动拉起 uvicorn 和激活环境）：
+   ```bash
+   ./start_dashboard.sh
+   ```
+3. **在浏览器中访问**：
+   打开浏览器并访问：[http://127.0.0.1:8999/dashboard](http://127.0.0.1:8999/dashboard)
+
+### 4.2 如何使用 Phase 4 仪表盘功能
+
+* **实时监控数据卡片**：顶部四张卡片分别展示 Total Processed、Completed、Failed 和 Reused (代表命中了缓存)。这些均由后台数据库(`run_track.db`)即时测算而出。
+* **提交新任务 (Submit New Job)**：
+  1. 在 `Playlist/Video URL` 栏填入一个 YouTube/Podcast 播放列表链接 或 单一链接。
+  2. 点击 **Start Processing** 获取后台列队派发的 `Job ID`。
+  3. 后端服务此时将通过 `job_manager.py` 挂起一条异步任务调起 `src/main.py -list "<URL>"` 生成摘要文件。
+* **查阅近期任务 (Recent Runs)**：
+  1. 下方表格列出了历史处理流程（比如识别的 UP 主名/标题等 Identifier、跑的类型，以及对应的成功/错误代码）。
+  2. 提供一个简单的搜素条可检索相关运行记录。
+* **结果下载与 ZIP 导出**：
+  当一个前端触发建立的 Playlist 任务跑完时，系统会把它本次生成所有的 Markdown Summary / Transcript 文件和清单聚合，在 `output/zips/` 目录产生一份形如 `summary_bundle_job_xxx_YYYYMMDD_HHMM.zip` 的报告打包档案。您亦可通过 API `GET /api/jobs/{job_id}/zip` 对其进行远端拿取。
+
+### 4.3 补充功能：精准的 Daily Digest 报告
+通过本次升级，现每日报告(Daily Summary)已优化为更智能的匹配方式。只需执行：
+```bash
+python src/main.py --daily-summary
+```
+系统将会读取最新的 .md Markdown文件头匹配最原始的 YouTube 标题和 AI 推理核心，并推算纯粹的 Uploader 名称。随后，此 Daily Digest 将自动置于仓库根部的 `daily_digest/` 目录下（便于在 GitHub 直观审阅）。
