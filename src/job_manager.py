@@ -51,6 +51,14 @@ class JobManager:
                 return dict(row)
         return None
 
+    def get_recent_jobs(self, limit: int = 10) -> list:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM web_jobs ORDER BY created_at DESC LIMIT ?", (limit,))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
     def run_playlist_job(self, job_id: str, playlist_url: str, api_key: Optional[str] = None, 
                          summary_style: str = "detailed", github_upload: bool = False):
         self.update_job(job_id, 'running')

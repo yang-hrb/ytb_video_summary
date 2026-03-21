@@ -46,6 +46,23 @@
         </div>
 
         <div class="card">
+            <h2>Recent Batch Jobs & Zip Bundles</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Input Details</th>
+                        <th>Status</th>
+                        <th>Started At</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="jobs-table-body">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
             <h2>Recent Runs</h2>
             <div class="search-bar">
                 <input type="text" id="search-input" placeholder="Search by identifier or URL...">
@@ -68,6 +85,12 @@
     </div>
 
     <script>
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const dotIndex = dateStr.indexOf('.');
+            return (dotIndex !== -1) ? dateStr.substring(0, dotIndex) : dateStr;
+        }
+
         async function loadStats() {
             try {
                 const res = await fetch('/api/stats');
@@ -77,6 +100,42 @@
                 document.getElementById('stat-failed').innerText = data.failed || 0;
                 document.getElementById('stat-reused').innerText = data.reused || 0;
             } catch (e) { console.error('Error loading stats:', e); }
+        }
+
+        async function loadJobs() {
+            try {
+                const res = await fetch('/api/jobs');
+                const data = await res.json();
+                const tbody = document.getElementById('jobs-table-body');
+                tbody.innerHTML = '';
+                
+                if (data.items) {
+                    data.items.forEach(job => {
+                        const tr = document.createElement('tr');
+                        let badgeClass = '';
+                        if (job.status === 'completed') badgeClass = 'completed';
+                        else if (job.status === 'failed') badgeClass = 'failed';
+                        
+                        let actionBtn = '';
+                        if (job.status === 'completed' && job.zip_path) {
+                            actionBtn = `<a href="/api/jobs/${job.job_id}/zip" target="_blank" style="text-decoration:none;">
+                                <button style="background-color:#28a745; padding:5px 10px; font-size:12px;">Download ZIP</button>
+                            </a>`;
+                        } else if (job.status === 'running') {
+                            actionBtn = `<span style="font-size:12px; color:#666;">Processing...</span>`;
+                        }
+
+                        tr.innerHTML = `
+                            <td>${job.job_id}</td>
+                            <td title="${job.playlist_url}">${job.playlist_url.substring(0, 40)}${job.playlist_url.length > 40 ? '...' : ''}</td>
+                            <td><span class="badge ${badgeClass}">${job.status.toUpperCase()}</span></td>
+                            <td>${formatDate(job.created_at)}</td>
+                            <td>${actionBtn}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (e) { console.error('Error loading jobs:', e); }
         }
 
         async function loadRuns() {
@@ -102,8 +161,8 @@
                             <td title="${run.url_or_path}">${run.identifier || run.url_or_path.substring(0, 30)}...</td>
                             <td>${run.type}</td>
                             <td><span class="badge ${badgeClass}">${run.status}</span></td>
-                            <td>${run.started_at}</td>
-                            <td>${run.updated_at}</td>
+                            <td>${formatDate(run.started_at)}</td>
+                            <td>${formatDate(run.updated_at)}</td>
                         `;
                         tbody.appendChild(tr);
                     });
@@ -124,12 +183,16 @@
                 const data = await res.json();
                 document.getElementById('job-status').innerText = `Job submitted successfully! Job ID: ${data.job_id}`;
                 document.getElementById('playlist-url').value = '';
+                
+                // Refresh jobs automatically
+                setTimeout(loadJobs, 1000);
             } catch (e) {
                 alert('Error submitting job');
             }
         }
 
         loadStats();
+        loadJobs();
         loadRuns();
     </script>
 </body>

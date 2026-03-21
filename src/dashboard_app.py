@@ -50,6 +50,10 @@ async def create_playlist_job(request: PlaylistJobRequest, background_tasks: Bac
                               request.api_key, request.summary_style, request.github_upload)
     return {"job_id": job_id, "status": "queued"}
 
+@app.get("/api/jobs")
+async def list_recent_jobs(limit: int = 10):
+    return {"items": job_manager.get_recent_jobs(limit=limit)}
+
 @app.get("/api/jobs/{job_id}")
 async def get_job_status(job_id: str):
     job = job_manager.get_job(job_id)
