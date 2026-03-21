@@ -19,6 +19,30 @@
 - ✅ Batch processing from a text file or YouTube playlist
 - ✅ Optional automated GitHub uploads for backup
 
+## 🏗️ Architecture (Phase 1-4 Improvements)
+
+The codebase has been significantly refactored for better maintainability:
+
+### Phase 1: Stability
+- **Exception Hierarchy**: Unified `PipelineError` base class with specific exceptions (`DownloadError`, `TranscriptionError`, etc.)
+- **Database Layer**: `DatabaseManager` for consistent SQLite operations with WAL mode optimization
+- **Error Handling**: No empty except blocks; all errors properly logged
+
+### Phase 2: Code Quality
+- **CLI Module**: Separated `src/cli/` for argument parsing, command handling, and display
+- **Type Annotations**: Complete type hints on all public APIs
+- **Batch Processing**: Reusable `BatchProcessor` for consistent batch operations
+
+### Phase 3: Maintainability
+- **Centralized Config**: All settings in `config/settings.py` with validation
+- **Unified Output**: `src/cli/display.py` for consistent console output
+- **Test Coverage**: 40 tests with 100% pass rate
+
+### Phase 4: Tooling
+- **CI/CD**: GitHub Actions workflow for automated testing
+- **Documentation**: Updated AGENTS.md with architecture decisions
+- **Performance**: SQLite WAL mode and cache optimization
+
 ## 📊 Data Workflow
 
 ```
