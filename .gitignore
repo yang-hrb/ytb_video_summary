@@ -238,3 +238,4 @@ youtube_summarizer.log
 logs/run_track.db
 input.txt
 logs/input_old_20260130.txt
+src/main.py.bak
