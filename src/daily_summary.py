@@ -108,6 +108,9 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
             
         link = f"[Report]({gurl})" if gurl else (filename if filename else video_id)
         
+        uploader = uploader.replace('|', '').replace('  ', ' ').strip()
+        title = title.replace('|', '').replace('  ', ' ').strip()
+        
         row_str = f"| {uploader} | {title} | {model} | {link} |"
         content.append(row_str)
         
