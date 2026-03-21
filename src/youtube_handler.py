@@ -20,12 +20,6 @@ from .utils import extract_video_id, find_ffmpeg_location
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
-CHROME_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
-)
-
 
 def _retry_sleep_http(retry_count: int) -> int:
     return min(5 * retry_count, 60)
@@ -42,14 +36,14 @@ def build_ydl_opts(
         "quiet": True,
         "no_warnings": True,
         "noplaylist": False,
-        "user_agent": CHROME_USER_AGENT,
+        "user_agent": config.HTTP_USER_AGENT,
         "referer": "https://www.youtube.com/",
-        "sleep_interval": 3,
-        "max_sleep_interval": 6,
-        "concurrent_fragment_downloads": 1,
-        "retries": 10,
-        "fragment_retries": 10,
-        "extractor_retries": 10,
+        "sleep_interval": config.YOUTUBE_SLEEP_INTERVAL,
+        "max_sleep_interval": config.YOUTUBE_MAX_SLEEP,
+        "concurrent_fragment_downloads": config.YOUTUBE_CONCURRENT_DOWNLOADS,
+        "retries": config.HTTP_MAX_RETRIES,
+        "fragment_retries": config.YOUTUBE_FRAGMENT_RETRIES,
+        "extractor_retries": config.HTTP_MAX_RETRIES,
         "retry_sleep_functions": {"http": _retry_sleep_http},
     }
 

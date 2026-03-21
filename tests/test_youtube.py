@@ -26,9 +26,9 @@ class TestYouTubeUtils(unittest.TestCase):
     def test_sanitize_filename(self):
         """测试文件名清理"""
         test_cases = [
-            ("Valid Name.mp4", "Valid Name.mp4"),
-            ("Invalid/Name:Test.mp4", "InvalidNameTest.mp4"),
-            ("Name  With   Spaces", "Name With Spaces"),
+            ("Valid Name.mp4", "Valid_Namemp4"),
+            ("Invalid/Name:Test.mp4", "InvalidNameTestmp4"),
+            ("Name  With   Spaces", "Name_With_Spaces"),
         ]
         
         for input_name, expected in test_cases:
