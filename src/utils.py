@@ -35,6 +35,85 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
     return filename
 
 
+def get_category_folder(channel_name: str) -> str:
+    """
+    Determine the category folder for a channel based on the first character of its name.
+
+    Mapping:
+      0-9          → 00_number
+      A-Z (a-z)   → NN_X_letter  (e.g. A→01_A_letter, B→02_B_letter … Z→26_Z_letter)
+      Chinese/CJK → resolved via pinyin initial letter then same mapping above
+
+    Args:
+        channel_name: The raw channel / uploader name
+
+    Returns:
+        Category folder string, e.g. ``"13_M_letter"``
+    """
+    if not channel_name:
+        return "00_number"
+
+    first_char = channel_name[0]
+
+    if first_char.isdigit():
+        return "00_number"
+
+    upper_char = first_char.upper()
+
+    if upper_char.isalpha() and ord('A') <= ord(upper_char) <= ord('Z'):
+        num = ord(upper_char) - ord('A') + 1
+        return f"{num:02d}_{upper_char}_letter"
+
+    # Chinese / CJK characters: derive pinyin initial via pypinyin if available,
+    # otherwise fall back to a hardcoded common-character table.
+    try:
+        from pypinyin import lazy_pinyin, Style
+        pinyin_list = lazy_pinyin(first_char, style=Style.FIRST_LETTER)
+        if pinyin_list and pinyin_list[0]:
+            initial = pinyin_list[0][0].upper()
+            if 'A' <= initial <= 'Z':
+                num = ord(initial) - ord('A') + 1
+                return f"{num:02d}_{initial}_letter"
+    except ImportError:
+        pass
+
+    # Minimal fallback table for the most common CJK initials used in channel names
+    _CJK_INITIALS: dict[str, str] = {
+        # 七 qī
+        '\u4e03': 'Q',
+        # 向 xiàng
+        '\u5411': 'X',
+        # 立 lì
+        '\u7acb': 'L',
+        # 中 zhōng
+        '\u4e2d': 'Z',
+        # 大 dà
+        '\u5927': 'D',
+        # 新 xīn
+        '\u65b0': 'X',
+        # 美 měi
+        '\u7f8e': 'M',
+        # 华 huá
+        '\u534e': 'H',
+        # 人 rén
+        '\u4eba': 'R',
+        # 台 tái
+        '\u53f0': 'T',
+        # 政 zhèng
+        '\u653f': 'Z',
+        # 当 dāng
+        '\u5f53': 'D',
+    }
+    initial = _CJK_INITIALS.get(first_char)
+    if initial:
+        num = ord(initial) - ord('A') + 1
+        return f"{num:02d}_{initial}_letter"
+
+    # Last resort: treat as number bucket
+    logger.warning("Cannot determine category folder for channel starting with %r; using 00_number", first_char)
+    return "00_number"
+
+
 def extract_summary_title(summary: str, max_length: int = 50) -> str:
     """
     Extract title from summary content

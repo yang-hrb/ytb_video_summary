@@ -126,15 +126,20 @@ def generate_daily_summary(target_date: str = None, upload: bool = True):
     
     if upload:
         try:
-            from src.github_handler import upload_to_github
-            remote_url = upload_to_github(
-                report_file, 
-                remote_folder="daily_digest", 
-                use_month_folder=True
-            )
-            logger.info(f"Daily summary uploaded: {remote_url}")
-            return remote_url
+            from src.github_handler import GitHubHandler
+            from config import config as _cfg
+            if _cfg.GITHUB_TOKEN and _cfg.GITHUB_REPO:
+                handler = GitHubHandler()
+                remote_path = f"daily_digest/{year_month}/{report_file.name}"
+                remote_url = handler.upload_file(
+                    report_file,
+                    remote_path,
+                    commit_message=f"Add daily digest: {report_file.name}",
+                )
+                logger.info(f"Daily summary uploaded: {remote_url}")
+                return remote_url
         except Exception as e:
             logger.error(f"Failed to upload daily summary: {e}")
-            
+
     return str(report_file)
+
