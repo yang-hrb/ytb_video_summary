@@ -8,6 +8,7 @@ feedparser>=6.0.0  # For Apple Podcasts RSS feed parsing
 
 # Utilities
 colorama>=0.4.6
+pypinyin>=0.51.0  # Chinese channel name → pinyin initial for category folder mapping
 
 # Whisper transcription — platform-conditional
 # Apple Silicon (M1/M2/M3): mlx-whisper uses Metal for much faster transcription

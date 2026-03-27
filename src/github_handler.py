@@ -119,7 +119,13 @@ class GitHubHandler:
             raise
 
 
-def upload_to_github(file_path: Path, remote_folder: str = "summary", uploader: Optional[str] = None, use_month_folder: bool = True) -> Optional[str]:
+def upload_to_github(
+    file_path: Path,
+    remote_folder: str = "summary",
+    uploader: Optional[str] = None,
+    use_month_folder: bool = True,
+    use_category_folder: bool = False,
+) -> Optional[str]:
     """
     Upload a file to GitHub repository (convenience function)
 
@@ -128,6 +134,9 @@ def upload_to_github(file_path: Path, remote_folder: str = "summary", uploader: 
         remote_folder: Folder in repository (default: summary)
         uploader: Uploader name for folder structure
         use_month_folder: Whether to place inside a YYYY_MM subfolder
+        use_category_folder: When True, insert the category sub-folder derived
+            from the uploader's first character between *remote_folder* and the
+            uploader folder, e.g. ``summary/13_M_letter/Matt_Wolfe/2026_03/``.
 
     Returns:
         File URL in GitHub, or None if GitHub is not configured
@@ -140,15 +149,19 @@ def upload_to_github(file_path: Path, remote_folder: str = "summary", uploader: 
     try:
         handler = GitHubHandler()
         month_part = f"{datetime.now().strftime('%Y_%m')}/" if use_month_folder else ""
-        
+
         if uploader:
-            from .utils import sanitize_filename
+            from .utils import sanitize_filename, get_category_folder
             clean_up = sanitize_filename(uploader, max_length=50)
-            remote_path = f"{remote_folder}/{clean_up}/{month_part}{file_path.name}"
+            if use_category_folder:
+                category = get_category_folder(uploader)
+                remote_path = f"{remote_folder}/{category}/{clean_up}/{month_part}{file_path.name}"
+            else:
+                remote_path = f"{remote_folder}/{clean_up}/{month_part}{file_path.name}"
         else:
             base_folder = "misc" if use_month_folder else "misc/"
             remote_path = f"{remote_folder}/{base_folder}/{month_part}{file_path.name}".replace("//", "/")
-            
+
         url = handler.upload_file(file_path, remote_path)
         return url
     except Exception as e:

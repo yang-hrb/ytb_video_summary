@@ -134,7 +134,7 @@ class ProcessingPipeline:
             return None
         self._set_stage('upload', 'UPLOADING')
         try:
-            github_url = upload_to_github(report_file, uploader=uploader)
+            github_url = upload_to_github(report_file, uploader=uploader, use_category_folder=True)
             if github_url:
                 logger.info("GitHub URL: %s", github_url)
             return github_url
