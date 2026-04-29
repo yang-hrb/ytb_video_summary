@@ -32,7 +32,7 @@ class CommandHandler:
             config.validate()
         except ValueError as e:
             logger.error(str(e))
-            logger.error("Please ensure OPENROUTER_API_KEY is set in .env file")
+            logger.error("Please ensure provider env is set correctly (OPENROUTER_API_KEY or XIAOMI_API_KEY).")
             sys.exit(1)
 
         try:
