@@ -10,6 +10,15 @@ class Config:
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
     OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openrouter/free')
+    OPENROUTER_BASE_URL = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1/chat/completions')
+
+    # Xiaomi MiMo API (OpenAI-compatible endpoint)
+    XIAOMI_API_KEY = os.getenv('XIAOMI_API_KEY', '')
+    XIAOMI_MODEL = os.getenv('XIAOMI_MODEL', 'MiMo-V2.5')
+    XIAOMI_BASE_URL = os.getenv('XIAOMI_BASE_URL', 'https://token-plan-sgp.xiaomimimo.com/v1/chat/completions')
+
+    # Summary provider selection
+    SUMMARY_PROVIDER = os.getenv('SUMMARY_PROVIDER', 'openrouter').lower()
     MODEL_PRIORITY_1 = os.getenv('MODEL_PRIORITY_1', 'openrouter/free')
     MODEL_PRIORITY_2 = os.getenv('MODEL_PRIORITY_2', 'openrouter/free')
     MODEL_PRIORITY_3 = os.getenv('MODEL_PRIORITY_3', 'openrouter/free')
@@ -73,8 +82,12 @@ class Config:
 
     @classmethod
     def validate(cls) -> bool:
-        if not cls.OPENROUTER_API_KEY:
-            raise ValueError("Set OPENROUTER_API_KEY in .env file")
+        if cls.SUMMARY_PROVIDER not in ('openrouter', 'xiaomi'):
+            raise ValueError("SUMMARY_PROVIDER must be one of: openrouter, xiaomi")
+        if cls.SUMMARY_PROVIDER == 'openrouter' and not cls.OPENROUTER_API_KEY:
+            raise ValueError("Set OPENROUTER_API_KEY in .env file when SUMMARY_PROVIDER=openrouter")
+        if cls.SUMMARY_PROVIDER == 'xiaomi' and not cls.XIAOMI_API_KEY:
+            raise ValueError("Set XIAOMI_API_KEY in .env file when SUMMARY_PROVIDER=xiaomi")
         if cls.HTTP_TIMEOUT < 1:
             raise ValueError("HTTP_TIMEOUT must be positive")
         if cls.YOUTUBE_SLEEP_INTERVAL < 0:

@@ -30,7 +30,11 @@ class Summarizer:
         if not any(self.openrouter_models):
             self.openrouter_models = [self.model]
 
-        self.openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.openrouter_url = config.OPENROUTER_BASE_URL
+        self.summary_provider = config.SUMMARY_PROVIDER
+        self.xiaomi_key = config.XIAOMI_API_KEY
+        self.xiaomi_model = config.XIAOMI_MODEL
+        self.xiaomi_url = config.XIAOMI_BASE_URL
 
     @staticmethod
     def clean_srt_content(content: str) -> str:
@@ -219,6 +223,10 @@ Please output in the following format:
         }
 
     def _summarize_with_waterfall(self, prompt: str, max_tokens: int) -> tuple:
+        if self.summary_provider == "xiaomi":
+            summary = self._summarize_xiaomi(prompt, max_tokens, self.xiaomi_model)
+            return summary, self.xiaomi_model
+
         if self.openrouter_key:
             for model_name in self.openrouter_models:
                 if not model_name:
@@ -252,6 +260,31 @@ Please output in the following format:
                         break
 
         raise RuntimeError("All OpenRouter models failed")
+
+    def _summarize_xiaomi(self, prompt: str, max_tokens: int, model_name: str) -> str:
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": 0.7,
+        }
+
+        logger.info("Sending request to Xiaomi API (model: %s)...", model_name)
+        response = requests.post(
+            self.xiaomi_url,
+            headers={
+                "Authorization": f"Bearer {self.xiaomi_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=60,
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        summary = result['choices'][0]['message']['content']
+        logger.info("Summary generated successfully")
+        return summary.strip()
 
     def _summarize_openrouter(self, prompt: str, max_tokens: int, model_name: str) -> str:
         payload = {
