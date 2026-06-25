@@ -1,113 +1,95 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
+## Project
+
+YouTube/podcast transcription & summarization tool. Downloads audio from YouTube (incl. membership), Apple Podcasts, or local MP3 → transcribes via Whisper → summarizes via OpenRouter model waterfall → saves reports locally and optionally uploads to GitHub.
+
+Three source types: **youtube** (video/playlist), **podcast** (single/show), **local** (folder of MP3s).
+
+## Data / Workflow
 
 ```
-.
-├── src/                    # Core source code
-│   ├── cli/                # CLI module (Phase 2)
-│   │   ├── parser.py       # Argument parsing
-│   │   ├── commands.py     # Command handling
-│   │   └── display.py      # Console output
-│   ├── main.py             # Entry point (~215 lines)
-│   ├── pipeline.py         # Processing pipeline
-│   ├── exceptions.py       # Exception hierarchy (Phase 1)
-│   ├── database.py         # Database access layer (Phase 1)
-│   ├── batch_processor.py  # Generic batch processor (Phase 2)
-│   ├── run_tracker.py      # State tracking
-│   ├── youtube_handler.py  # YouTube download
-│   ├── apple_podcasts_handler.py  # Apple Podcasts
-│   ├── transcriber.py      # Whisper transcription
-│   ├── summarizer.py       # AI summarization
-│   └── utils.py            # Utilities
-├── config/                 # Environment configuration
-│   ├── settings.py         # Centralized config (Phase 3)
-│   ├── prompt_types/       # AI prompt templates
-│   └── prompt_profile_map.csv  # Uploader-to-prompt mapping
-├── tests/                  # unittest-based tests (40 tests)
-├── scripts/                # Shell scripts and diagnostics
-│   ├── quick-run.sh        # Quick single video processing
-│   ├── batch-run.sh        # Batch file processing
-│   ├── watch-run.sh        # Channel watcher daemon
-│   ├── dashboard.sh        # Web dashboard launcher
-│   ├── full_auto_run_*.sh  # Automated processing scripts
-│   └── diagnostics/        # Diagnostic utilities
-├── doc/                    # Documentation
-├── web/                    # Web dashboard frontend
-├── output/                 # Generated artifacts (gitignored)
-├── logs/                   # Log files (gitignored)
-└── temp/                   # Temporary files (gitignored)
+Input Source                Processing Pipeline                     Output
+────────────                ───────────────────                     ──────
+YouTube URL          ┌──────────────────────────────────────┐   transcripts/*.srt
+  │ or playlist      │ ProcessingPipeline (src/pipeline.py) │   summaries/*_summary.md
+  │ or Apple Podcast │                                      │   reports/*.md
+  │ or local MP3 dir │ 1. Download (yt-dlp / feedparser)    │   (optionally) GitHub upload
+  │ or batch file    │    ↓ stage='download'                │
+  │ or web dashboard │ 2. Transcribe (Whisper)              │   run_track.db
+  └────────────────→│    ↓ stage='transcribe'              │   (SQLite state tracker)
+                     │ 3. Summarize (OpenRouter waterfall)  │
+                     │    ↓ stage='summarize'               │
+                     │ 4. Upload report (GitHub, optional)  │
+                     │    ↓ stage='upload'                  │
+                     │ 5. Save to run_track.db              │
+                     └──────────────────────────────────────┘
+                          ↑ Status tracked per stage      ↑ Smart resume:
+                          status ∈ {PENDING, DOWNLOADING,   --resume-only picks up from
+                          TRANSCRIBING, TRANSCRIPT_READY,   last failed stage without
+                          SUMMARIZING, SUMMARY_READY,        re-downloading audio
+                          COMPLETED, *_FAILED}
 ```
 
-## Build, Test, and Development Commands
+## Essential Commands
 
 ```bash
 # Setup
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # then set OPENROUTER_API_KEY
+cp .env.example .env  # set OPENROUTER_API_KEY
 
-# Run
-python src/main.py -video "URL"
+# Run (entrypoint)
+python src/main.py "https://youtube.com/watch?v=xxxxx"
 python src/main.py --help
 
-# Web Dashboard
-./scripts/dashboard.sh
+# Dashboard (FastAPI on 127.0.0.1:8999/dashboard)
+./dashboard.sh                        # or: uvicorn src.dashboard_app:app --reload --port 8999
 
 # Test
-python -m unittest discover tests
-
-# Lint (optional)
-mypy src/ --ignore-missing-imports
+python -m unittest discover tests      # all 40 tests
+python -m unittest tests.test_database # single module
 ```
 
-## Coding Style & Naming Conventions
+## Architecture — What's Non-Obvious
 
-- Python uses 4-space indentation and standard PEP 8 conventions
-- Use `snake_case` for functions/variables and `PascalCase` for classes
-- All public APIs should have type annotations (Phase 2)
-- Use project-specific exceptions from `src/exceptions.py` (Phase 1)
-- Use `DatabaseManager` for database operations (Phase 1)
-- Use `BatchProcessor` for batch operations (Phase 2)
-- Configuration values should be in `config/settings.py` (Phase 3)
+- **`ProcessingPipeline`** (`src/pipeline.py`) is the central orchestrator. It wraps download→transcribe→summarize→upload in a SQLite-tracked state machine. Every item (video, MP3, podcast episode) goes through one pipeline instance. The `resume()` static method re-animates failed runs from their last stage.
 
-## Architecture Decisions
+- **`ProcessingPipeline` accepts a shared `Transcriber`** to avoid reloading Whisper per-item in batches. Batch modules (`src/batch.py`) use `_make_shared_transcriber()` to pre-warm the model once.
 
-### Phase 1: Stability
-- **Exception Hierarchy**: All exceptions inherit from `PipelineError`
-- **Database Layer**: Use `DatabaseManager` for unified DB access with WAL mode
-- **Error Handling**: No empty except blocks; always log errors
+- **Two Whisper backends** (`src/transcriber.py`): `mlx-whisper` on Apple Silicon (arm64 macOS), `openai-whisper` everywhere else. Controlled by `WHISPER_BACKEND=auto|mlx|openai`. The mlx backend auto-falls back to openai if the mlx package is missing.
 
-### Phase 2: Code Quality
-- **CLI Separation**: `src/cli/` handles all CLI logic
-- **Type Annotations**: All public APIs have complete type hints
-- **Batch Processing**: Use `BatchProcessor` for any batch operations
+- **Config singleton**: `from config import config` gives you the `Config` instance from `config/settings.py`. It reads all env vars on import, validates `OPENROUTER_API_KEY`, and auto-creates output directories.
 
-### Phase 3: Maintainability
-- **Centralized Config**: All config in `config/settings.py` with validation
-- **Console Output**: Use `src/cli/display.py` for user output
-- **Testing**: Maintain test coverage for new modules
+- **`from config import config` works because `src/main.py` inserts project root into `sys.path`** on line 13-15. Test files do the same manually.
 
-### Phase 4: Tooling
-- **Scripts**: All shell scripts in `scripts/` directory
-- **Diagnostics**: Diagnostic tools in `scripts/diagnostics/`
-- **Documentation**: Architecture decisions in `doc/`
+- **Smart resume status map** (`RunTracker.RESUMABLE_STATUS_MAP`):
+  - `DOWNLOAD_FAILED` → full re-process needed (no audio saved)
+  - `TRANSCRIBE_FAILED` → re-transcribe if audio file exists
+  - `TRANSCRIPT_READY` / `SUMMARIZE_FAILED` → re-summarize from existing SRT
+  - `SUMMARY_READY` / `UPLOAD_FAILED` → re-upload existing report
 
-## Testing Guidelines
+- **Dynamic prompts** (`src/prompt_selector.py`): Reads `config/prompt_profile_map.csv` (uploader→prompt_type mapping) and picks a random prompt from `config/prompt_types/{type}.txt`. Each type file can have multiple prompts separated by `---`.
 
-- Tests use the standard library `unittest` framework
-- Name new tests `tests/test_<topic>.py` and test methods `test_<behavior>`
-- Run individual tests with `python -m unittest tests.test_transcriber`
-- Current test count: 40 tests (100% passing)
+- **Batch modules are split across two files**: `src/batch_processor.py` has the generic `BatchProcessor[T,R]` dataclass-driven processor. `src/batch.py` has the concrete batch orchestration for playlists, podcast shows, local folders, and mixed batch files.
 
-## Commit & Pull Request Guidelines
+- **Web dashboard** (`src/dashboard_app.py`): FastAPI served via uvicorn. Uses `DashboardService`, `JobManager`, and `ZipExporter`. The HTML is a single-file vanilla JS dashboard at `web/dashboard.html`.
 
-- Commit history favors short, imperative subjects with optional prefixes like `feat:`, `docs:`, or `refactor:`.
-- Keep commits scoped to a single change and describe user-visible impact.
-- PRs should include a concise summary, the commands used to test (if any), and screenshots or sample output when UI/report changes are involved.
+- **GitHub upload path**: `summary/<category_letter>/<uploader_slug>/YYYY_MM/filename`. Category is derived from the uploader name's first character for alphabetical grouping.
 
-## Security & Configuration Tips
+- **Failure log**: One file per process session (`logs/failures_{timestamp}.txt`), not one file per failure (prevents 80+ files). Auto-cleaned after 30 days via `cleanup_old_logs()`.
 
-- Never commit `.env` or API keys; use `.env.example` as the template.
-- Generated files in `output/`, `logs/`, and `temp/` are local artifacts and should stay out of version control.
-- Cookies files (`cookies.txt`) contain sensitive data and are gitignored.
+## Conventions
+
+- Use `PipelineError` subclasses from `src/exceptions.py` for project exceptions (`DownloadError`, `TranscriptionError`, `SummarizationError`, `UploadError`, `ConfigurationError`, `PodcastError`, `DatabaseError`, `ValidationError`, `ExternalServiceError`).
+- Use `DatabaseManager` for all SQLite operations — provides WAL mode, context manager connections, and raises `DatabaseError`.
+- All console output goes through `src/cli/display.py` functions. The `CommandHandler` in `src/cli/commands.py` dispatches parsed args.
+- `logger = logging.getLogger(__name__)` per module using the `ytb_summarizer` logger hierarchy. `src/logger.py` sets up colored console + file handlers.
+- Tests in `tests/` use `unittest` framework. Database tests create temp files in `setUp`/`tearDown`. Avoid real API calls.
+
+## Testing
+
+- Run `python -m unittest discover tests` — 40 tests, all passing.
+- Test files: `test_database.py`, `test_run_tracker.py`, `test_summarizer.py`, `test_summarizer_fallback.py`, `test_transcriber.py`, `test_youtube.py`, `test_batch_processor.py`, `test_file_storage.py`, `test_prompt_selector.py`, `test_dashboard.py`.
+- `test_dashboard.py` starts an actual HTTP server and hits the API — skip it for quick feedback loops.
+- New tests: `tests/test_<topic>.py` with `test_<behavior>` method names.
