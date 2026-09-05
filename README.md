@@ -36,7 +36,7 @@ The codebase has been significantly refactored for better maintainability:
 ### Phase 3: Maintainability
 - **Centralized Config**: All settings in `config/settings.py` with validation
 - **Unified Output**: `src/cli/display.py` for consistent console output
-- **Test Coverage**: 40 tests with 100% pass rate
+- **Test Coverage**: 41 tests (`python -m unittest discover tests`; skip `test_dashboard.py` for quick loops — it needs a live HTTP server / `venv/bin/uvicorn`)
 
 ### Phase 4: Tooling
 - **CI/CD**: GitHub Actions workflow for automated testing
@@ -93,7 +93,7 @@ cp .env.example .env
 Start the built-in FastAPI dashboard to easily manage your processing jobs:
 
 ```bash
-./start_dashboard.sh
+./dashboard.sh
 ```
 Then visit **[http://127.0.0.1:8999/dashboard](http://127.0.0.1:8999/dashboard)** in your browser!
 - Submit single videos or full playlists.
@@ -166,16 +166,24 @@ output/
 ├── transcripts/
 │   └── [video_id]_transcript.srt      # Subtitle file
 ├── summaries/
-│   └── [video_id]_summary.md          # Summary file 
-├── reports/
-│   └── [timestamp]_[uploader]_[title].md  # Finished Report (Timestamped)
+│   └── [video_id]_summary.md          # Intermediate summary file
+├── summary/
+│   └── [timestamp]_[uploader]_[title].md  # Finished report (REPORT_DIR)
+│   └── daily_digest/                 # Daily digest reports
 └── zips/
     └── summary_bundle_job_*.zip       # Batch UI Zip Export
 
 logs/
-└── ytb_summarizer_[timestamp].log     # Detailed logs
-run_track.db                           # SQLite Pipeline Tracker
+├── ytb_summarizer_[timestamp].log     # Detailed logs
+├── failures_[timestamp].txt           # Per-session failure log
+└── run_track.db                       # SQLite pipeline tracker
 ```
+
+> Notes:
+> - Completed runs are reused automatically (same identifier → existing report is returned without reprocessing). Delete the report or its DB row to force a re-run.
+> - `OPENROUTER_API_KEY` is required for all CLI commands, including `--status` / `--list-failed`.
+> - `--cookies-from-browser` is **disabled by default** — pass it explicitly (or `--cookies <file>`) for membership / login-walled videos.
+> - `output/reports/` is a legacy leftover; new reports go to `output/summary/`.
 
 ## ⚙️ Configuration
 
@@ -200,7 +208,7 @@ Key options available in `.env`:
 
 ---
 
-**Last Updated**: 2026-03-20
+**Last Updated**: 2026-09-05
 
 ## 📝 Recent Changes (v2.1 / 2026-03 Update)
 
