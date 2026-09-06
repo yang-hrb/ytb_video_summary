@@ -93,3 +93,17 @@ python -m unittest tests.test_database # single module
 - Test files: `test_database.py`, `test_run_tracker.py`, `test_summarizer.py`, `test_summarizer_fallback.py`, `test_transcriber.py`, `test_youtube.py`, `test_batch_processor.py`, `test_file_storage.py`, `test_prompt_selector.py`, `test_dashboard.py`.
 - `test_dashboard.py` starts an actual HTTP server and hits the API — skip it for quick feedback loops.
 - New tests: `tests/test_<topic>.py` with `test_<behavior>` method names.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context (one `CONTEXT.md` + `docs/adr/` at the repo root). See `docs/agents/domain.md`.
