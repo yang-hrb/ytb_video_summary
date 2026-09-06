@@ -57,14 +57,6 @@ class ConfigurationError(PipelineError):
     pass
 
 
-class PodcastError(PipelineError):
-    """播客处理异常
-
-    用于Apple Podcasts RSS解析、下载等场景。
-    """
-    pass
-
-
 class DatabaseError(PipelineError):
     """数据库操作异常
 

@@ -6,11 +6,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 
@@ -368,19 +363,6 @@ def find_ffmpeg_location() -> Optional[str]:
 
     logger.warning("FFmpeg not found in common locations")
     return None
-
-
-def is_apple_podcasts_url(url: str) -> bool:
-    """
-    Detect if URL is an Apple Podcasts URL
-
-    Args:
-        url: URL to check
-
-    Returns:
-        True if Apple Podcasts URL, False otherwise
-    """
-    return bool(re.search(r'podcasts\.apple\.com', url))
 
 
 # extract_podcast_id() removed — duplicated by ApplePodcastsHandler.extract_podcast_id()

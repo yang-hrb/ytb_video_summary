@@ -19,16 +19,14 @@ from colorama import init
 from config import config
 from src.logger import setup_logging, get_logger, get_current_log_file
 from src.youtube_handler import process_youtube_video, get_playlist_videos
-from src.apple_podcasts_handler import process_apple_podcast_episode, get_podcast_episodes
 from src.transcriber import transcribe_video_audio, read_subtitle_file, Transcriber
 from src.summarizer import summarize_transcript
-from src.utils import get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename, is_apple_podcasts_url
+from src.utils import get_file_size_mb, is_playlist_url, extract_playlist_id, sanitize_filename
 from src.github_handler import upload_to_github, upload_logs_to_github
 from src.run_tracker import get_tracker, log_failure
 from src.batch import (
     process_playlist_batch,
     process_local_folder_batch,
-    process_podcast_show_batch,
     process_batch_file as _process_batch_file,
 )
 from src.pipeline import ProcessingPipeline, STAGE_TO_FAILED_STATUS
@@ -45,7 +43,8 @@ def process_video(
     browser: str = "chrome",
     keep_audio: bool = False,
     summary_style: str = "detailed",
-    upload_to_github_repo: bool = False
+    upload_to_github_repo: bool = False,
+    force: bool = False,
 ) -> dict:
     pipeline = ProcessingPipeline(
         run_type='youtube',
@@ -53,6 +52,7 @@ def process_video(
         identifier='',
         summary_style=summary_style,
         upload=upload_to_github_repo,
+        force=force,
     )
     return pipeline.run_youtube(
         cookies_file=cookies_file,
@@ -65,7 +65,8 @@ def process_video(
 def process_local_mp3(
     mp3_path: Path,
     summary_style: str = "detailed",
-    upload_to_github_repo: bool = False
+    upload_to_github_repo: bool = False,
+    force: bool = False,
 ) -> dict:
     pipeline = ProcessingPipeline(
         run_type='local',
@@ -73,6 +74,7 @@ def process_local_mp3(
         identifier=mp3_path.stem,
         summary_style=summary_style,
         upload=upload_to_github_repo,
+        force=force,
     )
     return pipeline.run_local_mp3(mp3_path)
 
@@ -80,10 +82,12 @@ def process_local_mp3(
 def process_local_folder(
     folder_path: Path,
     summary_style: str = "detailed",
-    upload_to_github_repo: bool = False
+    upload_to_github_repo: bool = False,
+    force: bool = False,
 ) -> List[dict]:
     return process_local_folder_batch(
-        folder_path, summary_style=summary_style, upload=upload_to_github_repo
+        folder_path, summary_style=summary_style, upload=upload_to_github_repo,
+        force=force,
     )
 
 
@@ -94,7 +98,8 @@ def process_playlist(
     browser: str = "chrome",
     keep_audio: bool = False,
     summary_style: str = "detailed",
-    upload_to_github_repo: bool = False
+    upload_to_github_repo: bool = False,
+    force: bool = False,
 ) -> List[dict]:
     return process_playlist_batch(
         playlist_url,
@@ -104,56 +109,7 @@ def process_playlist(
         keep_audio=keep_audio,
         summary_style=summary_style,
         upload=upload_to_github_repo,
-    )
-
-
-def process_apple_podcast(
-    url: str,
-    episode_index: int = 0,
-    summary_style: str = "detailed",
-    upload_to_github_repo: bool = False
-) -> dict:
-    logger.info("[1/3] Fetching podcast episode information...")
-    result = process_apple_podcast_episode(url, episode_index)
-
-    podcast_info = result['podcast_info']
-    episode_info = result['episode_info']
-    audio_path = result['audio_path']
-    identifier = result['identifier']
-
-    logger.info("  Podcast: %s", podcast_info['title'])
-    logger.info("  Episode: %s", episode_info['title'])
-
-    video_info = {
-        'title': episode_info['title'],
-        'uploader': podcast_info.get('artist', podcast_info.get('title', 'Unknown Podcast')),
-        'duration': episode_info.get('duration', 0),
-    }
-
-    pipeline = ProcessingPipeline(
-        run_type='podcast',
-        url_or_path=url,
-        identifier=identifier,
-        summary_style=summary_style,
-        upload=upload_to_github_repo,
-    )
-    inner = pipeline.run_podcast(audio_path, video_info)
-
-    return {
-        'identifier': identifier,
-        'podcast_info': podcast_info,
-        'episode_info': episode_info,
-        **inner,
-    }
-
-
-def process_apple_podcast_show(
-    url: str,
-    summary_style: str = "detailed",
-    upload_to_github_repo: bool = False
-) -> List[dict]:
-    return process_podcast_show_batch(
-        url, summary_style=summary_style, upload=upload_to_github_repo
+        force=force,
     )
 
 
@@ -164,7 +120,8 @@ def process_batch_file(
     browser: str = "chrome",
     keep_audio: bool = False,
     summary_style: str = "detailed",
-    upload_to_github_repo: bool = False
+    upload_to_github_repo: bool = False,
+    force: bool = False,
 ) -> dict:
     return _process_batch_file(
         batch_file,
@@ -173,7 +130,8 @@ def process_batch_file(
         browser=browser,
         keep_audio=keep_audio,
         summary_style=summary_style,
-        upload=upload_to_github_repo
+        upload=upload_to_github_repo,
+        force=force,
     )
 
 

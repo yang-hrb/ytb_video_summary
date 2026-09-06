@@ -11,14 +11,18 @@ passed in to avoid reloading the Whisper model for every item in a batch.
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from config import config
-from src.run_tracker import get_tracker, log_failure
+from src.run_tracker import (
+    log_failure, get_dedup_db, find_completed_video,
+    mark_video_completed, mark_video_failed, local_content_id,
+)
 from src.transcriber import Transcriber, transcribe_video_audio, read_subtitle_file
 from src.summarizer import summarize_transcript
-from src.utils import get_file_size_mb
+from src.utils import extract_video_id, get_file_size_mb
 from src.github_handler import upload_to_github
 
 logger = logging.getLogger(__name__)
@@ -34,15 +38,16 @@ STAGE_TO_FAILED_STATUS = {
 
 class ProcessingPipeline:
     """Run the full download → transcribe → summarize → upload pipeline for
-    a single YouTube video, local MP3, or podcast episode.
+    a single YouTube video or local MP3.
 
     Args:
-        run_type: 'youtube' | 'local' | 'podcast'
+        run_type: 'youtube' | 'local'
         url_or_path: Original URL or file path string
         identifier: video_id / file stem / episode identifier
         summary_style: 'detailed' | 'brief'
         upload: Whether to upload the report to GitHub
         transcriber: Optional pre-loaded Transcriber instance (avoids reloading model)
+        force: Re-run even when the dedup DB has a COMPLETED row (--force/--no-reuse)
     """
 
     def __init__(
@@ -53,6 +58,7 @@ class ProcessingPipeline:
         summary_style: str = "detailed",
         upload: bool = False,
         transcriber: Optional[Transcriber] = None,
+        force: bool = False,
     ):
         self.run_type = run_type
         self.url_or_path = url_or_path
@@ -60,69 +66,69 @@ class ProcessingPipeline:
         self.summary_style = summary_style
         self.upload = upload
         self._shared_transcriber = transcriber
+        self.force = force
 
-        self.tracker = get_tracker()
-        self.run_id: Optional[int] = None
         self.current_stage: str = "download"
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _start(self):
-        self.run_id = self.tracker.start_run(
-            self.run_type, self.url_or_path, self.identifier
-        )
-        self.tracker.update_status(self.run_id, 'PENDING', stage='download')
-        logger.debug("Pipeline started: run_id=%s identifier=%s", self.run_id, self.identifier)
-
     def _set_stage(self, stage: str, status: str):
+        del status  # terminal state goes to the videos table in _complete/_fail
         self.current_stage = stage
-        if self.run_id:
-            self.tracker.update_status(self.run_id, status, stage=stage)
+
+    def _reuse_hit(self, video_id: str) -> Optional[dict]:
+        """Return a reused-result dict when the new DB has COMPLETED + existing MD."""
+        if self.force or not video_id:
+            return None
+        try:
+            row = find_completed_video(get_dedup_db(), video_id)
+        except Exception as e:
+            logger.warning("Dedup check skipped (DB unavailable): %s", e)
+            return None
+        if not row or not row.get('md_path'):
+            return None
+        md_path = Path(row['md_path'])
+        if not md_path.exists():
+            return None
+        try:
+            generated = datetime.fromtimestamp(md_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        except OSError:
+            generated = row.get('updated_at') or '?'
+        logger.info("Reusing COMPLETED %s → report: %s (generated: %s)",
+                    video_id, md_path, generated)
+        return {
+            'reused': True,
+            'report_file': md_path,
+            'github_url': row.get('github_url'),
+        }
 
     def _fail(self, error: Exception):
         status = STAGE_TO_FAILED_STATUS.get(self.current_stage, 'DOWNLOAD_FAILED')
-        if self.run_id:
-            self.tracker.update_status(self.run_id, status, str(error), stage=self.current_stage)
+        del status
+        try:
+            mark_video_failed(get_dedup_db(), self.identifier or self.url_or_path,
+                              self.url_or_path, str(error))
+        except Exception as e:
+            logger.warning("Failed to record FAILED state: %s", e)
         log_failure(self.run_type, self.identifier, self.url_or_path, str(error), stage=self.current_stage)
 
     def _complete(self, transcript_path=None, summary_path=None, report_path=None,
-                  github_url=None, model_used=None, audio_path=None, prompt_info=None):
-        if self.run_id:
-            self.tracker.update_status(self.run_id, 'COMPLETED', error_message=None, stage='done')
-            
-            updates = {
-                "transcript_path": str(transcript_path) if transcript_path else None,
-                "summary_path": str(summary_path) if summary_path else None,
-                "report_path": str(report_path) if report_path else None,
-                "github_url": github_url,
-                "model_used": model_used,
-                "audio_path": str(audio_path) if audio_path else None,
-                "summary_style": self.summary_style,
-            }
-            if prompt_info:
-                updates.update({
-                    "prompt_type": prompt_info.get("prompt_type"),
-                    "prompt_source": prompt_info.get("prompt_source"),
-                    "prompt_index": prompt_info.get("prompt_index"),
-                    "prompt_file": prompt_info.get("prompt_file"),
-                })
-                
-            self.tracker.update_artifacts(self.run_id, **updates)
-
-            # Register files to file_storage table
-            def _reg(path_obj, ftype, gurl=None):
-                if not path_obj: return
-                p = Path(path_obj) if isinstance(path_obj, str) else path_obj
-                if getattr(p, 'exists', lambda: False)():
-                    sz = p.stat().st_size
-                    self.tracker.register_file(self.run_id, ftype, str(p), file_size=sz, github_url=gurl)
-            
-            _reg(transcript_path, 'transcript')
-            _reg(summary_path, 'summary')
-            _reg(report_path, 'report', gurl=github_url)
-            _reg(audio_path, 'audio')
+                   github_url=None, model_used=None, audio_path=None, prompt_info=None,
+                   publish_date=None, channel_url=None,
+                   uploader=None, title=None, duration_seconds=None):
+        del transcript_path, summary_path, model_used, audio_path, prompt_info  # legacy runs-table detail; videos table keeps the report pointer
+        try:
+            mark_video_completed(
+                get_dedup_db(), self.identifier, self.url_or_path,
+                md_path=str(report_path) if report_path else None,
+                github_url=github_url, channel_url=channel_url,
+                publish_date=publish_date,
+                uploader=uploader, title=title, duration_seconds=duration_seconds,
+            )
+        except Exception as e:
+            logger.warning("Failed to record COMPLETED state: %s", e)
 
     # ------------------------------------------------------------------
     # Upload helper (shared by all run types)
@@ -140,39 +146,8 @@ class ProcessingPipeline:
             return github_url
         except Exception as e:
             logger.warning("GitHub upload failed: %s", e)
-            if self.run_id:
-                self.tracker.update_status(
-                    self.run_id, 'UPLOAD_FAILED', str(e), stage='upload'
-                )
             return None
 
-    def _upload_info_json(self, video_info: dict):
-        if not self.upload or not video_info or not video_info.get('uploader'):
-            return
-        uploader = video_info['uploader']
-        import json
-        from datetime import datetime
-        now_str = datetime.now().isoformat()
-        info = {
-            "name": uploader,
-            "description": video_info.get('description', '')[:500] if video_info.get('description') else '',
-            "thumbnail_url": video_info.get('thumbnail_url', ''),
-            "channel_url": video_info.get('channel_url', ''),
-            "platform": self.run_type,
-            "last_updated": now_str,
-            "total_videos_processed": 1
-        }
-        from src.utils import sanitize_filename
-        safe_up = sanitize_filename(uploader)
-        info_path = config.TEMP_DIR / f"info_{safe_up}.json"
-        
-        try:
-            with open(info_path, 'w', encoding='utf-8') as f:
-                json.dump(info, f, ensure_ascii=False, indent=4)
-            upload_to_github(info_path, uploader=uploader, use_month_folder=False)
-        except Exception as e:
-            logger.warning("Failed to upload info.json: %s", e)
-            
     # ------------------------------------------------------------------
     # YouTube video pipeline
     # ------------------------------------------------------------------
@@ -193,18 +168,11 @@ class ProcessingPipeline:
             if vid:
                 self.identifier = vid
 
-        self._start()
         try:
-            # --- Check historical report reuse ---
-            historical = self.tracker.find_latest_completed_report(self.identifier)
-            if historical and Path(historical['file_path']).exists():
-                logger.info("Reusing existing report for %s: %s", self.identifier, historical['file_path'])
-                self.tracker.update_status(self.run_id, 'REUSED_EXISTING_REPORT', stage='done')
-                return {
-                    'reused': True,
-                    'report_file': Path(historical['file_path']),
-                    'github_url': historical.get('github_url'),
-                }
+            # --- Dedup: reuse COMPLETED row from the new DB (GitHub zero新增) ---
+            hit = self._reuse_hit(self.identifier)
+            if hit:
+                return hit
 
             # --- download ---
             self.current_stage = 'download'
@@ -266,9 +234,9 @@ class ProcessingPipeline:
             
             self._set_stage('upload', 'SUMMARY_READY')
             github_url = self._upload_report(report_file, uploader=video_info.get('uploader'))
-            self._upload_info_json(video_info)
 
             logger.info("[4/4] Processing complete!")
+            self.identifier = video_id
             self._complete(
                 transcript_path=srt_path,
                 summary_path=summary_result.get('summary_path'),
@@ -277,6 +245,10 @@ class ProcessingPipeline:
                 audio_path=audio_path_used,
                 prompt_info=prompt_info,
                 model_used=summary_result.get('model_used'),
+                publish_date=video_info.get('upload_date'),
+                uploader=video_info.get('uploader'),
+                title=video_info.get('title'),
+                duration_seconds=video_info.get('duration'),
             )
 
             return {
@@ -300,19 +272,17 @@ class ProcessingPipeline:
     # ------------------------------------------------------------------
 
     def run_local_mp3(self, mp3_path: Path) -> dict:
-        """Run the full pipeline for a local MP3 file."""
-        self._start()
+        """Run the full pipeline for a local MP3 file.
+
+        Dedup key is the content hash (rename-proof); url stores the original path.
+        """
         try:
-            # --- Check historical report reuse ---
-            historical = self.tracker.find_latest_completed_report(self.identifier)
-            if historical and Path(historical['file_path']).exists():
-                logger.info("Reusing existing report for %s: %s", self.identifier, historical['file_path'])
-                self.tracker.update_status(self.run_id, 'REUSED_EXISTING_REPORT', stage='done')
-                return {
-                    'reused': True,
-                    'report_file': Path(historical['file_path']),
-                    'github_url': historical.get('github_url'),
-                }
+            self.identifier = local_content_id(mp3_path)
+
+            # --- Dedup: reuse COMPLETED row from the new DB (GitHub zero新增) ---
+            hit = self._reuse_hit(self.identifier)
+            if hit:
+                return hit
 
             logger.info("  File: %s (%.2f MB)", mp3_path.name, get_file_size_mb(mp3_path))
 
@@ -333,7 +303,7 @@ class ProcessingPipeline:
             logger.info("[2/3] Generating AI summary...")
             self._set_stage('summarize', 'SUMMARIZING')
             video_info = {
-                'title': self.identifier,
+                'title': Path(mp3_path).stem,
                 'uploader': 'Local Audio',
                 'duration': int(tr_result.get('segments', [{}])[-1].get('end', 0)) if tr_result.get('segments') else 0,
             }
@@ -359,99 +329,14 @@ class ProcessingPipeline:
                 github_url=github_url,
                 prompt_info=prompt_info,
                 model_used=summary_result.get('model_used'),
+                uploader=video_info.get('uploader'),
+                title=video_info.get('title'),
+                duration_seconds=video_info.get('duration'),
             )
 
             return {
                 'file_name': self.identifier,
                 'file_path': mp3_path,
-                'transcript': transcript,
-                'transcript_file': srt_path,
-                'summary_file': summary_result.get('summary_path'),
-                'report_file': report_file,
-                'github_url': github_url,
-            }
-
-        except Exception as e:
-            logger.error("Processing failed: %s", e)
-            logger.debug("Error details", exc_info=True)
-            self._fail(e)
-            raise
-
-    # ------------------------------------------------------------------
-    # Podcast episode pipeline
-    # ------------------------------------------------------------------
-
-    def run_podcast(self, audio_path: Path, video_info: dict) -> dict:
-        """Run summarize → upload for a pre-downloaded podcast episode.
-
-        Transcription is expected to be done before calling this method
-        (audio_path points to the downloaded episode).  However, the full
-        transcription stage is handled here so the stage tracker is accurate.
-        """
-        self._start()
-        try:
-            # --- Check historical report reuse ---
-            historical = self.tracker.find_latest_completed_report(self.identifier)
-            if historical and Path(historical['file_path']).exists():
-                logger.info("Reusing existing report for %s: %s", self.identifier, historical['file_path'])
-                self.tracker.update_status(self.run_id, 'REUSED_EXISTING_REPORT', stage='done')
-                if audio_path.exists() and not config.KEEP_AUDIO:
-                    audio_path.unlink()
-                return {
-                    'reused': True,
-                    'report_file': Path(historical['file_path']),
-                    'github_url': historical.get('github_url'),
-                }
-
-            logger.info("  Audio: %s (%.2f MB)", audio_path, get_file_size_mb(audio_path))
-
-            # --- transcribe ---
-            self._set_stage('transcribe', 'AUDIO_DOWNLOADED')
-            logger.info("[2/3] Transcribing audio with Whisper...")
-            transcriber = self._shared_transcriber or Transcriber()
-            tr_result = transcriber.transcribe_audio(audio_path)
-            transcript = transcriber.get_transcript_text(tr_result)
-            whisper_language = tr_result.get('language', 'en')
-
-            srt_path = config.TRANSCRIPT_DIR / f"{self.identifier}_transcript.srt"
-            transcriber.save_as_srt(tr_result, srt_path)
-
-            if not config.KEEP_AUDIO:
-                audio_path.unlink(missing_ok=True)
-
-            logger.info("  Transcript length: %d chars | language: %s", len(transcript), whisper_language)
-            self._set_stage('transcribe', 'TRANSCRIPT_READY')
-
-            # --- summarize ---
-            logger.info("[3/3] Generating AI summary...")
-            self._set_stage('summarize', 'SUMMARIZING')
-            summary_result = summarize_transcript(
-                transcript, self.identifier, video_info,
-                style=self.summary_style,
-                language=config.SUMMARY_LANGUAGE,
-                video_url=self.url_or_path,
-            )
-
-            # --- upload ---
-            report_file = summary_result.get('report_path')
-            prompt_info = summary_result.get('prompt_info')
-            
-            self._set_stage('upload', 'SUMMARY_READY')
-            github_url = self._upload_report(report_file, uploader=video_info.get('uploader', 'Unknown Podcast'))
-            self._upload_info_json(video_info)
-
-            logger.info("[Done] Processing complete!")
-            self._complete(
-                transcript_path=srt_path,
-                summary_path=summary_result.get('summary_path'),
-                report_path=report_file,
-                github_url=github_url,
-                prompt_info=prompt_info,
-                model_used=summary_result.get('model_used'),
-            )
-
-            return {
-                'identifier': self.identifier,
                 'transcript': transcript,
                 'transcript_file': srt_path,
                 'summary_file': summary_result.get('summary_path'),
@@ -481,7 +366,7 @@ class ProcessingPipeline:
                                         → re-summarize from existing SRT
           SUMMARY_READY / UPLOAD_FAILED → re-upload existing report
         """
-        from src.run_tracker import RunTracker  # noqa: PLC0415
+        from src.run_tracker import RunTracker, get_tracker  # noqa: PLC0415
         tracker = get_tracker()
         status = run.get('status', '')
         run_id = run['id']

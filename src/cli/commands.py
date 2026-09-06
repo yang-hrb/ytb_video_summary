@@ -27,6 +27,10 @@ class CommandHandler:
     def __init__(self, args):
         self.args = args
 
+    @property
+    def _force(self) -> bool:
+        return bool(getattr(self.args, 'force', False) or getattr(self.args, 'no_reuse', False))
+
     def execute(self) -> None:
         try:
             config.validate()
@@ -56,12 +60,10 @@ class CommandHandler:
                 self._handle_daily_summary()
             elif self.args.batch:
                 self._handle_batch()
+            elif self.args.scan:
+                self._handle_scan()
             elif self.args.local:
                 self._handle_local()
-            elif self.args.apple_podcast_single:
-                self._handle_apple_podcast_single()
-            elif self.args.apple_podcast_list:
-                self._handle_apple_podcast_list()
             elif self.args.list:
                 self._handle_playlist()
             elif self.args.video:
@@ -174,8 +176,36 @@ class CommandHandler:
             browser=self.args.browser,
             keep_audio=self.args.keep_audio,
             summary_style=self.args.style,
-            upload=self.args.upload
+            upload=self.args.upload,
+            force=self._force,
         )
+
+    def _handle_scan(self) -> None:
+        from src.channel_watcher import ChannelWatcher, acquire_scan_lock
+        scan_file = Path(self.args.scan)
+        logger.info("Channel scan mode: %s (videos from last 2 days)", scan_file.absolute())
+        lock = acquire_scan_lock()
+        if lock is None:
+            logger.warning("Another scan is running (logs/scan.lock held); skipping.")
+            return
+        try:
+            w = ChannelWatcher(
+                cookies_file=self.args.cookies,
+                cookies_from_browser=self.args.cookies_from_browser,
+                browser=self.args.browser
+            )
+            processed = w.execute_scan(
+                channels_file=scan_file,
+                upload=self.args.upload,
+                summary_style=self.args.style,
+                max_hours=getattr(self.args, 'max_hours', None),
+            )
+            logger.info(f"Scan complete. Processed {processed} videos.")
+        finally:
+            try:
+                lock.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _handle_local(self) -> None:
         from src.main import process_local_folder
@@ -193,26 +223,8 @@ class CommandHandler:
         process_local_folder(
             folder_path,
             summary_style=self.args.style,
-            upload_to_github_repo=self.args.upload
-        )
-
-    def _handle_apple_podcast_single(self) -> None:
-        from src.main import process_apple_podcast
-        logger.info("Apple Podcasts single episode mode")
-        process_apple_podcast(
-            self.args.apple_podcast_single,
-            episode_index=0,
-            summary_style=self.args.style,
-            upload_to_github_repo=self.args.upload
-        )
-
-    def _handle_apple_podcast_list(self) -> None:
-        from src.main import process_apple_podcast_show
-        logger.info("Apple Podcasts show mode")
-        process_apple_podcast_show(
-            self.args.apple_podcast_list,
-            summary_style=self.args.style,
-            upload_to_github_repo=self.args.upload
+            upload_to_github_repo=self.args.upload,
+            force=self._force,
         )
 
     def _handle_playlist(self) -> None:
@@ -225,7 +237,8 @@ class CommandHandler:
             browser=self.args.browser,
             keep_audio=self.args.keep_audio,
             summary_style=self.args.style,
-            upload_to_github_repo=self.args.upload
+            upload_to_github_repo=self.args.upload,
+            force=self._force,
         )
 
     def _handle_video(self) -> None:
@@ -238,22 +251,15 @@ class CommandHandler:
             browser=self.args.browser,
             keep_audio=self.args.keep_audio,
             summary_style=self.args.style,
-            upload_to_github_repo=self.args.upload
+            upload_to_github_repo=self.args.upload,
+            force=self._force,
         )
 
     def _handle_default_url(self) -> None:
-        from src.main import process_video, process_playlist, process_apple_podcast
-        from src.utils import is_playlist_url, is_apple_podcasts_url
+        from src.main import process_video, process_playlist
+        from src.utils import is_playlist_url
 
-        if is_apple_podcasts_url(self.args.url):
-            logger.info("Detected Apple Podcasts URL (single episode)")
-            process_apple_podcast(
-                self.args.url,
-                episode_index=0,
-                summary_style=self.args.style,
-                upload_to_github_repo=self.args.upload
-            )
-        elif is_playlist_url(self.args.url):
+        if is_playlist_url(self.args.url):
             logger.info("Detected YouTube playlist")
             process_playlist(
                 self.args.url,
@@ -262,7 +268,8 @@ class CommandHandler:
                 browser=self.args.browser,
                 keep_audio=self.args.keep_audio,
                 summary_style=self.args.style,
-                upload_to_github_repo=self.args.upload
+                upload_to_github_repo=self.args.upload,
+                force=self._force,
             )
         else:
             logger.info("Detected YouTube single video")
@@ -273,7 +280,8 @@ class CommandHandler:
                 browser=self.args.browser,
                 keep_audio=self.args.keep_audio,
                 summary_style=self.args.style,
-                upload_to_github_repo=self.args.upload
+                upload_to_github_repo=self.args.upload,
+                force=self._force,
             )
 
     def _show_usage(self) -> None:
@@ -281,10 +289,9 @@ class CommandHandler:
         logger.info("Usage:")
         logger.info("  python src/main.py -video <YouTube video URL>")
         logger.info("  python src/main.py -list <YouTube playlist URL>")
-        logger.info("  python src/main.py --apple-podcast-single <Apple Podcasts URL>")
-        logger.info("  python src/main.py --apple-podcast-list <Apple Podcasts URL>")
         logger.info("  python src/main.py -local <MP3 folder path>")
         logger.info("  python src/main.py --batch <input file>")
+        logger.info("  python src/main.py --scan <channellist file>")
         logger.info("Or use default mode:")
         logger.info("  python src/main.py <URL>")
         logger.info("Use --help for detailed help")

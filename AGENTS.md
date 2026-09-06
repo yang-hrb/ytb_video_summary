@@ -1,101 +1,75 @@
 # AGENTS.md
 
-## Project
+YouTube transcription & summarization tool. YouTube video/playlist/channel-scan or local MP3 folder → download → Whisper transcribe → OpenRouter waterfall summarize → local report + optional GitHub upload. Podcast and dashboard were deleted (Sep 2026); do not re-add.
 
-YouTube/podcast transcription & summarization tool. Downloads audio from YouTube (incl. membership), Apple Podcasts, or local MP3 → transcribes via Whisper → summarizes via OpenRouter model waterfall → saves reports locally and optionally uploads to GitHub.
-
-Three source types: **youtube** (video/playlist), **podcast** (single/show), **local** (folder of MP3s).
-
-## Data / Workflow
-
-```
-Input Source                Processing Pipeline                     Output
-────────────                ───────────────────                     ──────
-YouTube URL          ┌──────────────────────────────────────┐   output/transcripts/*.srt
-  │ or playlist      │ ProcessingPipeline (src/pipeline.py) │   output/summaries/*_summary.md
-  │ or Apple Podcast │                                      │   output/summary/*.md (REPORT_DIR)
-  │ or local MP3 dir │ 1. Download (yt-dlp / feedparser)    │   (optionally) GitHub upload
-  │ or batch file    │    ↓ stage='download'                │
-  │ or web dashboard │ 2. Transcribe (Whisper)              │   logs/run_track.db
-  └────────────────→│    ↓ stage='transcribe'              │   (SQLite state tracker)
-                     │ 3. Summarize (OpenRouter waterfall)  │
-                     │    ↓ stage='summarize'               │
-                     │ 4. Upload report (GitHub, optional)  │
-                     │    ↓ stage='upload'                  │
-                     │ 5. Save to logs/run_track.db        │
-                     └──────────────────────────────────────┘
-                          ↑ Status tracked per stage      ↑ Smart resume:
-                          status ∈ {PENDING, DOWNLOADING,   --resume-only picks up from
-                          TRANSCRIBING, TRANSCRIPT_READY,   last failed stage without
-                          SUMMARIZING, SUMMARY_READY,        re-downloading audio
-                          COMPLETED, *_FAILED}
-```
-
-## Essential Commands
+## Setup
 
 ```bash
-# Setup
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # set OPENROUTER_API_KEY
-
-# Run (entrypoint)
-python src/main.py "https://youtube.com/watch?v=xxxxx"
-python src/main.py --help
-
-# Dashboard (FastAPI on 127.0.0.1:8999/dashboard)
-./dashboard.sh                        # or: uvicorn src.dashboard_app:app --reload --port 8999
-
-# Test
-python -m unittest discover tests      # all 41 tests
-python -m unittest tests.test_database # single module
+cp .env.example .env  # then set OPENROUTER_API_KEY (required for every run)
 ```
 
-## Architecture — What's Non-Obvious
+- Env is read from repo-root `.env` via `load_dotenv()` in `config/settings.py`: `OPENROUTER_API_KEY` (required), `GITHUB_TOKEN` / `GITHUB_REPO` (only needed with `--upload`).
+- Without `OPENROUTER_API_KEY` every CLI command exits 1 (`config.validate()` in `CommandHandler.execute()`).
 
-- **`ProcessingPipeline`** (`src/pipeline.py`) is the central orchestrator. It wraps download→transcribe→summarize→upload in a SQLite-tracked state machine. Every item (video, MP3, podcast episode) goes through one pipeline instance. The `resume()` static method re-animates failed runs from their last stage.
+## The four commands (Hermes entry points)
 
-- **`ProcessingPipeline` accepts a shared `Transcriber`** to avoid reloading Whisper per-item in batches. Batch modules (`src/batch.py`) use `_make_shared_transcriber()` to pre-warm the model once.
+Canonical flags on all four: `--style detailed --cookies cookies.txt --upload` (omit `--cookies` if no `cookies.txt`; `--cookies-from-browser` defaults to disabled). `--style` defaults to `detailed`.
 
-- **Two Whisper backends** (`src/transcriber.py`): `mlx-whisper` on Apple Silicon (arm64 macOS), `openai-whisper` everywhere else. Controlled by `WHISPER_BACKEND=auto|mlx|openai`. The mlx backend auto-falls back to openai if the mlx package is missing.
+```bash
+source venv/bin/activate
+python src/main.py -video "https://youtube.com/watch?v=xxxxx" --style detailed --cookies cookies.txt --upload
+python src/main.py -list "https://youtube.com/playlist?list=xxxxx" --style detailed --cookies cookies.txt --upload
+python src/main.py -local ./audio_files --style detailed --upload
+python src/main.py --scan channellist.txt --style detailed --cookies cookies.txt --upload --max-hours 4
+```
 
-- **Config singleton**: `from config import config` gives you the `Config` instance from `config/settings.py`. It reads env via `load_dotenv()`, auto-creates output dirs on import. Works from repo root directly; `src/main.py` (and each test file) inserts project root into `sys.path` so `python src/main.py` also works.
+- `-local PATH` takes a folder of MP3s (e.g. `./audio_files`), not a single file.
+- `--scan FILE` reads `channellist.txt` (one channel URL per line, `#` comments skipped) and only runs videos published in the last 2 days. Daily cron wraps it: `scripts/daily_scan.sh` (`0 4 * * * .../scripts/daily_scan.sh`, `--max-hours 4`, single-instance via `logs/scan.lock`).
+- `--force` / `--no-reuse` forces re-processing even when a COMPLETED report exists.
+- `python src/main.py --help` shows all of the above.
 
-- **Smart resume status map** (`RunTracker.RESUMABLE_STATUS_MAP`, includes legacy aliases `TRANSCRIPT_GENERATED`→summarize, `SUMMARY_FAILED`→summarize):
-  - `DOWNLOAD_FAILED` → full re-process needed (no audio saved)
-  - `TRANSCRIBE_FAILED` → re-transcribe if audio file exists
-  - `TRANSCRIPT_READY` / `SUMMARIZE_FAILED` → re-summarize from existing SRT
-  - `SUMMARY_READY` / `UPLOAD_FAILED` → re-upload existing report
+## Dedup DB (the only "done before?" source)
 
-- **Dynamic prompts** (`src/prompt_selector.py`): Reads `config/prompt_profile_map.csv` (uploader→prompt_type mapping) and picks a random prompt from `config/prompt_types/{type}.txt`. Each type file can have multiple prompts separated by `---`.
+`logs/ytb_summary_track.db`, single table (auto-created + auto-migrated on first use):
 
-- **Batch modules are split across two files**: `src/batch_processor.py` has the generic `BatchProcessor[T,R]` dataclass-driven processor. `src/batch.py` has the concrete batch orchestration for playlists, podcast shows, local folders, and mixed batch files.
+```sql
+videos(video_id PK, url, channel_url, publish_date, first_seen, md_path,
+       github_url, status, fail_count, last_error, updated_at,
+       uploader, title, duration_seconds)
+-- video_id: YouTube 11-char id, or local_<sha256(content)[:16]> for MP3s
+--   (first 8 MB + file size hashed; renaming never re-runs, 1 changed byte does)
+-- status ∈ {COMPLETED, FAILED, PENDING_KILLED}
+```
 
-- **Web dashboard** (`src/dashboard_app.py`): FastAPI served via uvicorn. Uses `DashboardService`, `JobManager`, and `ZipExporter`. The HTML is a single-file vanilla JS dashboard at `web/dashboard.html`.
+- COMPLETED hit → old MD path is reused and referenced in the Digest, zero download/transcribe/summarize, zero GitHub writes. `logs/run_track.db` is a frozen legacy backup, never written; do not read it for status.
+- Legacy migration is automatic (`logs/run_track.db` → `logs/run_track_backup.db`, COMPLETED rows imported once via `migrate_legacy_db()`).
 
-- **GitHub upload path**: `summary/<category_letter>/<uploader_slug>/YYYY_MM/filename`. Category is derived from the uploader name's first character for alphabetical grouping.
+## Failures: where to look
 
-- **Failure log**: One file per process session (`logs/failures_{timestamp}.txt`), not one file per failure (prevents 80+ files). Auto-cleaned after 30 days via `cleanup_old_logs()`.
+- `logs/two_time_fail.txt` — one CSV line per video on its 2nd failure: `video_id,url,第一次失败时间,第二次失败时间,错误`.
+- Daily Digest (`generate_daily_summary(target_date=startup day)`) top red section `🔴 Failures` lists all `fail_count >= 2` rows with reasons; below it: Statistics, New Reports, Reused References, Unprocessed (`PENDING_KILLED`, silently retried next scan, `fail_count` untouched).
 
-## Gotchas
+## yt-dlp maintenance
 
-- **Completed runs are silently reused**: pipeline checks `find_latest_completed_report(identifier)` first and returns `REUSED_EXISTING_REPORT` without reprocessing. To force re-run, delete the report file or its DB row.
-- **`OPENROUTER_API_KEY` is required for every CLI command**: `CommandHandler.execute()` calls `config.validate()` up front, so even `--status` / `--list-failed` exits 1 without a key set.
-- **`--cookies-from-browser` defaults to disabled** (`parser.py`: `default=False`). Membership videos need it explicitly passed or `--cookies <file>`.
-- **`output/reports/` is legacy**: current report dir is `output/summary/` (`Config.REPORT_DIR`). Old `reports/` folder may still exist locally — don't write there.
-- **DB lives at `logs/run_track.db`** (`config.LOG_DIR`), not repo root.
+No auto-upgrade. Every 1–2 months run `pip install -U yt-dlp`, verify with one small playlist end-to-end, then pin the working version into `requirements.txt`. If downloads break, first step is always `yt-dlp --version` (expect drift, not a code bug).
 
-## Conventions
+## Architecture (only what's non-obvious)
 
-- Use `PipelineError` subclasses from `src/exceptions.py` for project exceptions (`DownloadError`, `TranscriptionError`, `SummarizationError`, `UploadError`, `ConfigurationError`, `PodcastError`, `DatabaseError`, `ValidationError`, `ExternalServiceError`).
-- Use `DatabaseManager` for all SQLite operations — provides WAL mode, context manager connections, and raises `DatabaseError`.
-- All console output goes through `src/cli/display.py` functions. The `CommandHandler` in `src/cli/commands.py` dispatches parsed args.
-- `logger = logging.getLogger(__name__)` per module using the `ytb_summarizer` logger hierarchy. `src/logger.py` sets up colored console + file handlers.
-- Tests in `tests/` use `unittest` framework. Database tests create temp files in `setUp`/`tearDown`. Avoid real API calls.
+- `src/pipeline.py:ProcessingPipeline` — download→transcribe→summarize→upload orchestrator; `run_youtube` / `run_local_mp3`; zero writes to the legacy DB. Accepts a shared `Transcriber` so batches pre-warm Whisper once (`src/batch.py:_make_shared_transcriber`).
+- `src/channel_watcher.py:execute_scan` — TXT → `dateafter` fetch → one batched dedup-DB status query → `select_scan_videos` (newest-first, stop at first COMPLETED / old / dateless entry; FAILED listed, never auto-rerun) → oldest-first pipeline runs → Digest. `--max-hours` marks pending as `PENDING_KILLED`, Digest still emits.
+- `src/summarizer.py` — transcripts truncated at `MAX_TRANSCRIPT_CHARS = 60000` (tail dropped, warning logged; no chunking by design). Waterfall: 429/5xx retried 3x per model, other non-auth errors switch model, 401/403 aborts immediately; total failure raises `RuntimeError("All OpenRouter models failed: ...")`.
+- `src/run_tracker.py` — all dedup-DB access (`find_completed_video`, `mark_video_completed/failed/pending_killed`, `migrate_legacy_db`); `DatabaseManager` (`src/database.py`) for all SQLite (WAL, raises `DatabaseError`).
+- Prompts: `src/prompt_selector.py` + `config/prompt_profile_map.csv` + `config/prompt_types/*.txt`. GitHub path: `summary/<first-letter>/<uploader>/YYYY_MM/file`. Output dirs: `output/transcripts/*.srt`, `output/summaries/`, `output/summary/` (`REPORT_DIR`).
+- Exceptions: `PipelineError` subclasses in `src/exceptions.py`. Logging: `logger = logging.getLogger(__name__)`; console output via `src/cli/display.py`.
 
 ## Testing
 
-- Run `python -m unittest discover tests` — 41 tests. `test_dashboard.py` spawns a real HTTP server and fails with `FileNotFoundError: venv/bin/uvicorn` if venv isn't set up — skip it for quick loops, run single modules instead.
-- Test files: `test_database.py`, `test_run_tracker.py`, `test_summarizer.py`, `test_summarizer_fallback.py`, `test_transcriber.py`, `test_youtube.py`, `test_batch_processor.py`, `test_file_storage.py`, `test_prompt_selector.py`, `test_dashboard.py`.
-- `test_dashboard.py` starts an actual HTTP server and hits the API — skip it for quick feedback loops.
-- New tests: `tests/test_<topic>.py` with `test_<behavior>` method names.
+```bash
+python -m unittest discover tests   # 84 tests, must stay green
+python -m unittest tests.test_dedup # single module
+```
+
+- `tests/test_*.py`, `test_<behavior>` methods, `unittest` only. No real network/API calls in tests (mock `requests.post` / fake pipelines).
+- No `venv/bin/uvicorn`, no dashboard tests — both deleted with the dashboard.

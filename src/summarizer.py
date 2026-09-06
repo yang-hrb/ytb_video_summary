@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 class Summarizer:
     """Use OpenRouter for text summarization"""
 
+    # 保命截断：超长 transcript 直接掐头去尾留前 N 字符（禁 map-reduce 分块）。
+    # 60000 字符 ≈ 15000 tokens，留足 prompt + max_tokens 余量。
+    MAX_TRANSCRIPT_CHARS = 60000
+
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.openrouter_key = api_key or config.OPENROUTER_API_KEY
         self.model = model or config.OPENROUTER_MODEL
@@ -51,8 +55,19 @@ class Summarizer:
 
         return " ".join(cleaned)
 
+    @classmethod
+    def _truncate_transcript(cls, text: str) -> str:
+        if len(text) > cls.MAX_TRANSCRIPT_CHARS:
+            logger.warning(
+                "Transcript too long (%d chars), truncated to %d chars.",
+                len(text),
+                cls.MAX_TRANSCRIPT_CHARS,
+            )
+            return text[:cls.MAX_TRANSCRIPT_CHARS]
+        return text
+
     def create_prompt(self, transcript: str, style: str = "detailed", language: str = "en") -> str:
-        transcript = self.clean_srt_content(transcript)
+        transcript = self._truncate_transcript(self.clean_srt_content(transcript))
 
         if language == "zh":
             if style == "brief":
@@ -199,7 +214,7 @@ Please output in the following format:
 
     def summarize(self, transcript: str, style: str = "detailed", language: str = "en", max_tokens: int = 8000, custom_prompt: Optional[str] = None) -> tuple:
         if custom_prompt:
-            transcript_clean = self.clean_srt_content(transcript)
+            transcript_clean = self._truncate_transcript(self.clean_srt_content(transcript))
             prompt = f"{custom_prompt}\n\nVideo transcript:\n{transcript_clean}"
         else:
             prompt = self.create_prompt(transcript, style, language)
@@ -218,7 +233,11 @@ Please output in the following format:
             "X-Title": "YouTube Video Summarizer"
         }
 
+    def _is_auth_error(self, status_code: Optional[int]) -> bool:
+        return status_code in (401, 403)
+
     def _summarize_with_waterfall(self, prompt: str, max_tokens: int) -> tuple:
+        failures = []
         if self.openrouter_key:
             for model_name in self.openrouter_models:
                 if not model_name:
@@ -230,6 +249,9 @@ Please output in the following format:
                         return summary, model_name
                     except requests.exceptions.RequestException as e:
                         status_code = getattr(getattr(e, "response", None), "status_code", None)
+                        if self._is_auth_error(status_code):
+                            raise RuntimeError(f"OpenRouter auth failed ({status_code}): {e}") from e
+                        failures.append(f"{model_name} (attempt {attempt}/3, status={status_code}): {e}")
                         retryable = self._is_retryable_http_error(status_code)
                         if retryable and attempt < 3:
                             backoff_seconds = 2 ** attempt
@@ -243,15 +265,16 @@ Please output in the following format:
                             time.sleep(backoff_seconds)
                             continue
 
-                        if retryable:
-                            logger.warning("OpenRouter model %s exhausted retries, switching to next model.", model_name)
-                            break
-                        raise
+                        # 400（含模型不存在/无效）/404/422 等非鉴权错误直接换下一个模型
+                        logger.warning("OpenRouter model %s failed, switching to next model: %s", model_name, e)
+                        break
                     except (ValueError, KeyError, TypeError) as e:
+                        failures.append(f"{model_name} (parsing): {e}")
                         logger.warning("OpenRouter model %s parsing failed: %s, switching model.", model_name, e)
                         break
 
-        raise RuntimeError("All OpenRouter models failed")
+        detail = "; ".join(failures) if failures else "no models configured or no API key"
+        raise RuntimeError(f"All OpenRouter models failed: {detail}")
 
     def _summarize_openrouter(self, prompt: str, max_tokens: int, model_name: str) -> str:
         payload = {
