@@ -6,6 +6,7 @@ temp/
 logs/  # includes run_track.db and failure logs
 failure*.txt
 bin/
+venv.bak*/
 
 # files
 *.db
