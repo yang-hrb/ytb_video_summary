@@ -63,7 +63,7 @@ Apple Podcasts           3. AI Summary                    Zip Bundle Export
 - Python 3.9+
 - FFmpeg 4.0+
 - 8GB+ RAM (16GB recommended)
-- OpenRouter API Key for summarization (free options available)
+- OpenRouter API key for `openrouter_free`, or an authenticated `agy` CLI for `agy_cli`
 
 ## 🚀 Quick Start
 
@@ -85,7 +85,7 @@ pip install -r requirements.txt
 ### 2. Configure Environment Variables
 ```bash
 cp .env.example .env
-# Edit .env file and configure your OPENROUTER_API_KEY
+# Set SUMMARY_PROVIDER and configure the credential for that provider
 ```
 
 ### 3. Run the Web Dashboard (Recommended)
@@ -181,7 +181,7 @@ logs/
 
 > Notes:
 > - Completed runs are reused automatically (same identifier → existing report is returned without reprocessing). Delete the report or its DB row to force a re-run.
-> - `OPENROUTER_API_KEY` is required for all CLI commands, including `--status` / `--list-failed`.
+> - `SUMMARY_PROVIDER` defaults to `openrouter_free`; `OPENROUTER_API_KEY` is required only for that provider. `agy_cli` requires an installed, already authenticated `agy` CLI.
 > - `--cookies-from-browser` is **disabled by default** — pass it explicitly (or `--cookies <file>`) for membership / login-walled videos.
 > - `output/reports/` is a legacy leftover; new reports go to `output/summary/`.
 
@@ -189,6 +189,7 @@ logs/
 
 Key options available in `.env`:
 - `WHISPER_BACKEND`: `auto` uses `mlx-whisper` for Apple Silicon; forces standard `openai-whisper` otherwise.
+- `SUMMARY_PROVIDER`: `openrouter_free` (default) or `agy_cli`. `agy_cli` sends the complete SRT and selected summary prompt to the local headless `agy` command and waits for its response.
 - `SUMMARY_LANGUAGE`: `zh` (Chinese) or `en` (English).
 - `OPENROUTER_MODEL` & `MODEL_PRIORITY_{1..3}`: Allows setup of a resilient waterfall of summarization models, gracefully failing over in case of a 429 or 500 error.
 

@@ -36,7 +36,7 @@ class TranscriptionError(PipelineError):
 class SummarizationError(PipelineError):
     """AI摘要生成失败异常
 
-    用于OpenRouter API调用、模型降级等场景。
+    用于AI摘要提供方调用失败等场景。
     """
     pass
 

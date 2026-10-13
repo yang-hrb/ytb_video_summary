@@ -1,17 +1,17 @@
 # AGENTS.md
 
-YouTube transcription & summarization tool. YouTube video/playlist/channel-scan or local MP3 folder → download → Whisper transcribe → OpenRouter waterfall summarize → local report + optional GitHub upload. Podcast and dashboard were deleted (Sep 2026); do not re-add.
+YouTube transcription & summarization tool. YouTube video/playlist/channel-scan or local MP3 folder → download → Whisper transcribe → configured AI summarize → local report + optional GitHub upload. Podcast and dashboard were deleted (Sep 2026); do not re-add.
 
 ## Setup
 
 ```bash
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # then set OPENROUTER_API_KEY (required for every run)
+cp .env.example .env  # configure SUMMARY_PROVIDER and its credentials
 ```
 
-- Env is read from repo-root `.env` via `load_dotenv()` in `config/settings.py`: `OPENROUTER_API_KEY` (required), `GITHUB_TOKEN` / `GITHUB_REPO` (only needed with `--upload`).
-- Without `OPENROUTER_API_KEY` every CLI command exits 1 (`config.validate()` in `CommandHandler.execute()`).
+- Env is read from repo-root `.env` via `load_dotenv()` in `config/settings.py`: `SUMMARY_PROVIDER` (`openrouter_free` by default or `agy_cli`), `OPENROUTER_API_KEY` (required only for `openrouter_free`), `GITHUB_TOKEN` / `GITHUB_REPO` (only needed with `--upload`).
+- `agy_cli` requires the `agy` executable on PATH and an already authenticated CLI account; the headless call waits for its response and fails the summary step on CLI errors.
 
 ## The four commands (Hermes entry points)
 
@@ -59,7 +59,7 @@ No auto-upgrade. Every 1–2 months run `pip install -U yt-dlp`, verify with one
 
 - `src/pipeline.py:ProcessingPipeline` — download→transcribe→summarize→upload orchestrator; `run_youtube` / `run_local_mp3`; zero writes to the legacy DB. Accepts a shared `Transcriber` so batches pre-warm Whisper once (`src/batch.py:_make_shared_transcriber`).
 - `src/channel_watcher.py:execute_scan` — TXT → `dateafter` fetch → one batched dedup-DB status query → `select_scan_videos` (newest-first, stop at first COMPLETED / old / dateless entry; FAILED listed, never auto-rerun) → oldest-first pipeline runs → Digest. `--max-hours` marks pending as `PENDING_KILLED`, Digest still emits.
-- `src/summarizer.py` — transcripts truncated at `MAX_TRANSCRIPT_CHARS = 60000` (tail dropped, warning logged; no chunking by design). Waterfall: 429/5xx retried 3x per model, other non-auth errors switch model, 401/403 aborts immediately; total failure raises `RuntimeError("All OpenRouter models failed: ...")`.
+- `src/summarizer.py` — OpenRouter transcripts are truncated at `MAX_TRANSCRIPT_CHARS = 60000` (tail dropped, warning logged; no chunking by design); `agy_cli` receives the complete SRT. Provider is selected by `SUMMARY_PROVIDER`; OpenRouter retries 429/5xx and switches models, while `agy_cli` uses the local authenticated CLI and fails the summary step on errors.
 - `src/run_tracker.py` — all dedup-DB access (`find_completed_video`, `mark_video_completed/failed/pending_killed`, `migrate_legacy_db`); `DatabaseManager` (`src/database.py`) for all SQLite (WAL, raises `DatabaseError`).
 - Prompts: `src/prompt_selector.py` + `config/prompt_profile_map.csv` + `config/prompt_types/*.txt`. GitHub path: `summary/<first-letter>/<uploader>/YYYY_MM/file`. Output dirs: `output/transcripts/*.srt`, `output/summaries/`, `output/summary/` (`REPORT_DIR`).
 - Exceptions: `PipelineError` subclasses in `src/exceptions.py`. Logging: `logger = logging.getLogger(__name__)`; console output via `src/cli/display.py`.

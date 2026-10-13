@@ -226,6 +226,7 @@ class ProcessingPipeline:
                 style=self.summary_style,
                 language=config.SUMMARY_LANGUAGE,
                 video_url=self.url_or_path,
+                srt_path=srt_path,
             )
 
             # --- upload ---
@@ -312,6 +313,7 @@ class ProcessingPipeline:
                 style=self.summary_style,
                 language=config.SUMMARY_LANGUAGE,
                 video_url=None,
+                srt_path=srt_path,
             )
 
             # --- upload ---
@@ -428,6 +430,7 @@ class ProcessingPipeline:
                     style=summary_style,
                     language=config.SUMMARY_LANGUAGE,
                     video_url=video_url,
+                    srt_path=srt_path,
                 )
                 report_file = summary_result.get('report_path')
                 prompt_info = summary_result.get('prompt_info')

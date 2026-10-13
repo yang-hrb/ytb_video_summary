@@ -36,7 +36,6 @@ class CommandHandler:
             config.validate()
         except ValueError as e:
             logger.error(str(e))
-            logger.error("Please ensure OPENROUTER_API_KEY is set in .env file")
             sys.exit(1)
 
         try:
