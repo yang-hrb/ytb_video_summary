@@ -37,9 +37,9 @@ def generate_daily_summary(target_date: str = None, upload: bool = True,
     by the caller — a run spilling past midnight still lands in this one file
     (output/summary/daily_digest/YYYY_MM/YYYY-MM-DD.md, overwritten in place).
 
-    Four sections: 🔴 red zone (two-time fails) / new reports / reused refs /
-    unprocessed PENDING_KILLED. All fields come from the new videos-table
-    columns (uploader/title/duration_seconds) — no filename guessing.
+    Four sections: statistics / new reports / reused refs / unprocessed
+    PENDING_KILLED / 🔴 red zone (two-time fails). All fields come from the
+    new videos-table columns (uploader/title/duration_seconds) — no filename guessing.
     """
     if not target_date:
         target_date = datetime.now().strftime("%Y%m%d")
@@ -81,14 +81,6 @@ def generate_daily_summary(target_date: str = None, upload: bool = True,
     content = [
         f"# Daily Summary for {day_str}",
         "",
-        "## 🔴 Failures (fail_count ≥ 2)",
-    ]
-    if red_rows:
-        content.extend(_fail_line(r) for r in red_rows)
-    else:
-        content.append("(none)")
-    content += [
-        "",
         "## Statistics",
         f"- New Reports: {len(new_rows)}",
         f"- Reused References: {len(reused_rows)}",
@@ -113,6 +105,14 @@ def generate_daily_summary(target_date: str = None, upload: bool = True,
     ]
     if pending_rows:
         content.extend(f"- `{_clean(r.get('video_id'))}` {_clean(r.get('url'))}" for r in pending_rows)
+    else:
+        content.append("(none)")
+    content += [
+        "",
+        "## 🔴 Failures (fail_count ≥ 2)",
+    ]
+    if red_rows:
+        content.extend(_fail_line(r) for r in red_rows)
     else:
         content.append("(none)")
 
