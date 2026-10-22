@@ -1,0 +1,394 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-22T19:19:09.932Z",
+  "specification": {
+    "path": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/candidate.json",
+    "sha256": "03ed3b009ef8ac385697c66fad6c92e672f6d3bcc3cadcf2882574c1c41d2c64",
+    "bytes": 7313
+  },
+  "artifact": {
+    "path": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+    "sha256": "6cbaaa5e76e990f524df3f9b913c63b0f32fc4017ef803f765b2ad1a5fac94e4",
+    "bytes": 841312
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "/Users/yangyu/.hermes/node/bin/node",
+        "/Users/yangyu/.codex/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/candidate.json",
+        "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/Users/yangyu/github/ytb_video_summary",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "03ed3b009ef8ac385697c66fad6c92e672f6d3bcc3cadcf2882574c1c41d2c64",
+          "bytes": 7313
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 392,
+      "command": [
+        "/Users/yangyu/.hermes/node/bin/node",
+        "/Users/yangyu/.codex/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/candidate.json",
+        "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/Users/yangyu/github/ytb_video_summary",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "355fb92c-f68f-4d09-9a9a-8ad4009434cb",
+        "ok": true,
+        "command": "deliver",
+        "type": "architecture",
+        "input": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/candidate.json",
+        "output": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+        "specification": {
+          "sha256": "03ed3b009ef8ac385697c66fad6c92e672f6d3bcc3cadcf2882574c1c41d2c64",
+          "bytes": 7313
+        },
+        "artifact": {
+          "sha256": "6cbaaa5e76e990f524df3f9b913c63b0f32fc4017ef803f765b2ad1a5fac94e4",
+          "bytes": 841312
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "git@github.com:yang-hrb/ytb_video_summary",
+          "revision": "6017b19a4cf99c4c11b5033d1437ab4d0810308c",
+          "references": 23,
+          "linkMode": "local-only"
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 134,
+      "command": [
+        "/Users/yangyu/.hermes/node/bin/node",
+        "/Users/yangyu/.codex/skills/archify/bin/archify.mjs",
+        "check",
+        "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+        "artifact": {
+          "sha256": "6cbaaa5e76e990f524df3f9b913c63b0f32fc4017ef803f765b2ad1a5fac94e4",
+          "bytes": 841312
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 0,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 13.5,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 6.017647058823529,
+            "maxBends": 3,
+            "routesOverSuggestedBends": 1,
+            "maxStretch": 1.308,
+            "routesOverSuggestedStretch": 0,
+            "minSegmentPx": 17,
+            "minInteriorSegmentPx": 55,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [],
+            "detours": [
+              {
+                "relationship": {
+                  "id": "local-to-cli",
+                  "from": "local-input",
+                  "to": "cli",
+                  "label": "命令参数",
+                  "collectionIndex": 1,
+                  "artifactIndex": 2
+                },
+                "bends": 3,
+                "stretch": 1.308
+              }
+            ]
+          },
+          "leadingSpace": {
+            "measured": true,
+            "emptyTopPx": 90,
+            "emptyTopRatio": 0.104,
+            "occupiedTop": 90,
+            "viewBoxTop": 0,
+            "canvasHeight": 867,
+            "typicalNodeHeight": 72,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "legacy-930",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 930,
+            "actualBudgetPx": 930,
+            "limit": "legacy",
+            "requestedTargetPx": 7.5,
+            "requestedTargetMet": false,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "node",
+              "id": "summarizer"
+            },
+            "minimumSourceTextPx": 7.7,
+            "minimumProjectedTextPx": 6.017647058823529,
+            "semanticTextCount": 45
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "355fb92c-f68f-4d09-9a9a-8ad4009434cb"
+      }
+    },
+    "browser-check": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": 5664,
+      "command": [
+        "/Users/yangyu/.hermes/node/bin/node",
+        "/Users/yangyu/.codex/skills/archify/bin/archify.mjs",
+        "browser-check",
+        "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+        "--json",
+        "--require-provenance"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "fail",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "355fb92c-f68f-4d09-9a9a-8ad4009434cb",
+        "artifact": {
+          "path": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+          "sha256": "6cbaaa5e76e990f524df3f9b913c63b0f32fc4017ef803f765b2ad1a5fac94e4",
+          "bytes": 841312
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "available",
+          "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        },
+        "diagnostics": [
+          {
+            "code": "viewer/browser-check-runtime",
+            "severity": "error",
+            "message": "browser-check could not complete its Chrome inspection.",
+            "subject": {
+              "artifact": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html"
+            },
+            "evidence": {
+              "reason": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v26.8.1, libuv 1.52.1, darwin; pid=53174, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+            },
+            "supportedFixes": [
+              "resolve the reported Chrome inspection error, then rerun browser-check"
+            ]
+          }
+        ],
+        "containment": {
+          "status": "fail",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": []
+        },
+        "themeStates": {
+          "status": "fail",
+          "viewports": []
+        },
+        "readability": {
+          "status": "fail",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": []
+        },
+        "viewerChrome": {
+          "status": "fail",
+          "viewports": []
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "receipt": "ytb-video-summary.browser-check.json",
+          "files": []
+        },
+        "error": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v26.8.1, libuv 1.52.1, darwin; pid=53174, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+      }
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/browser-check-runtime",
+      "severity": "error",
+      "message": "browser-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html"
+      },
+      "evidence": {
+        "reason": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v26.8.1, libuv 1.52.1, darwin; pid=53174, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun browser-check"
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.finalize.json",
+    "summaryReceipt": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.finalize-summary.json",
+    "browserCheckReceipt": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "browser-check",
+  "finishedAt": "2026-10-22T19:19:16.240Z",
+  "durationMs": 6308,
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  }
+}

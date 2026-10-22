@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "355fb92c-f68f-4d09-9a9a-8ad4009434cb",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/candidate.json",
+  "output": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+  "specification": {
+    "sha256": "03ed3b009ef8ac385697c66fad6c92e672f6d3bcc3cadcf2882574c1c41d2c64",
+    "bytes": 7313
+  },
+  "artifact": {
+    "sha256": "6cbaaa5e76e990f524df3f9b913c63b0f32fc4017ef803f765b2ad1a5fac94e4",
+    "bytes": 841312
+  }
+}
