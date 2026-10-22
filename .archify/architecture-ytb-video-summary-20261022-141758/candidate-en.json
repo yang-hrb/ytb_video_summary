@@ -1,0 +1,488 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "YouTube Video Summary Architecture",
+    "locale": "en",
+    "output": ".archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary-en.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/yang-hrb/ytb_video_summary.git",
+      "revision": "6017b19a4cf99c4c11b5033d1437ab4d0810308c"
+    }
+  },
+  "components": [
+    {
+      "id": "youtube-input",
+      "type": "external",
+      "label": "YouTube Videos / Playlists",
+      "sublabel": "-video · -list",
+      "pos": [
+        20,
+        110
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/cli/commands.py",
+          "line": 229,
+          "end_line": 255
+        }
+      ]
+    },
+    {
+      "id": "local-input",
+      "type": "external",
+      "label": "Local MP3 Folder",
+      "sublabel": "-local",
+      "pos": [
+        20,
+        310
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/cli/commands.py",
+          "line": 209,
+          "end_line": 227
+        }
+      ]
+    },
+    {
+      "id": "channel-input",
+      "type": "external",
+      "label": "Channel List",
+      "sublabel": "--scan · one channel URL per line",
+      "pos": [
+        20,
+        510
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/channel_watcher.py",
+          "line": 236,
+          "end_line": 243
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI Command Dispatch",
+      "sublabel": "src/main.py → CommandHandler",
+      "pos": [
+        235,
+        305
+      ],
+      "size": [
+        195,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/main.py",
+          "line": 164,
+          "end_line": 169
+        },
+        {
+          "path": "src/cli/commands.py",
+          "line": 34,
+          "end_line": 75
+        }
+      ]
+    },
+    {
+      "id": "batch",
+      "type": "backend",
+      "label": "Batch Processing",
+      "sublabel": "Playlists · local MP3 files",
+      "pos": [
+        465,
+        145
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/main.py",
+          "line": 82,
+          "end_line": 113
+        },
+        {
+          "path": "src/batch.py",
+          "line": 101,
+          "end_line": 132
+        }
+      ]
+    },
+    {
+      "id": "watcher",
+      "type": "backend",
+      "label": "Channel Scanner",
+      "sublabel": "Filter recent videos · --max-hours",
+      "pos": [
+        465,
+        455
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/channel_watcher.py",
+          "line": 214,
+          "end_line": 257
+        }
+      ]
+    },
+    {
+      "id": "pipeline",
+      "type": "backend",
+      "label": "ProcessingPipeline",
+      "sublabel": "Dedup → fetch → transcribe → summarize",
+      "pos": [
+        705,
+        295
+      ],
+      "size": [
+        210,
+        78
+      ],
+      "sources": [
+        {
+          "path": "src/pipeline.py",
+          "line": 155,
+          "end_line": 253
+        },
+        {
+          "path": "src/pipeline.py",
+          "line": 275,
+          "end_line": 299
+        }
+      ]
+    },
+    {
+      "id": "youtube-service",
+      "type": "external",
+      "label": "YouTube",
+      "sublabel": "Captions first; audio fallback",
+      "pos": [
+        960,
+        90
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/youtube_handler.py",
+          "line": 464,
+          "end_line": 487
+        }
+      ]
+    },
+    {
+      "id": "transcriber",
+      "type": "backend",
+      "label": "Whisper Transcription",
+      "sublabel": "Audio → text and SRT",
+      "pos": [
+        960,
+        245
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/transcriber.py",
+          "line": 134,
+          "end_line": 178
+        },
+        {
+          "path": "src/pipeline.py",
+          "line": 192,
+          "end_line": 220
+        }
+      ]
+    },
+    {
+      "id": "summarizer",
+      "type": "backend",
+      "label": "Summarization & Prompts",
+      "sublabel": "OpenRouter / agy_cli · uploader prompts",
+      "pos": [
+        960,
+        410
+      ],
+      "size": [
+        190,
+        82
+      ],
+      "sources": [
+        {
+          "path": "src/summarizer.py",
+          "line": 376,
+          "end_line": 420
+        },
+        {
+          "path": "src/summarizer.py",
+          "line": 224,
+          "end_line": 236
+        }
+      ]
+    },
+    {
+      "id": "dedup-db",
+      "type": "database",
+      "label": "SQLite Deduplication State",
+      "sublabel": "logs/ytb_summary_track.db · videos",
+      "pos": [
+        705,
+        520
+      ],
+      "size": [
+        210,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/run_tracker.py",
+          "line": 67,
+          "end_line": 68
+        },
+        {
+          "path": "src/run_tracker.py",
+          "line": 99,
+          "end_line": 107
+        },
+        {
+          "path": "src/pipeline.py",
+          "line": 81,
+          "end_line": 105
+        }
+      ]
+    },
+    {
+      "id": "report-files",
+      "type": "database",
+      "label": "Output Files",
+      "sublabel": "SRT · Markdown reports · daily digests",
+      "pos": [
+        960,
+        575
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/transcriber.py",
+          "line": 159,
+          "end_line": 178
+        },
+        {
+          "path": "src/summarizer.py",
+          "line": 403,
+          "end_line": 421
+        },
+        {
+          "path": "src/daily_summary.py",
+          "line": 119,
+          "end_line": 124
+        }
+      ]
+    },
+    {
+      "id": "digest",
+      "type": "backend",
+      "label": "Channel Scan Digest",
+      "sublabel": "New reports · reused · pending · failed",
+      "pos": [
+        465,
+        625
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/daily_summary.py",
+          "line": 30,
+          "end_line": 77
+        }
+      ]
+    },
+    {
+      "id": "github",
+      "type": "cloud",
+      "label": "GitHub Repository",
+      "sublabel": "Optional: --upload",
+      "pos": [
+        960,
+        735
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/pipeline.py",
+          "line": 137,
+          "end_line": 149
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "video-to-cli",
+      "from": "youtube-input",
+      "to": "cli",
+      "label": "-video"
+    },
+    {
+      "id": "local-to-cli",
+      "from": "local-input",
+      "to": "cli",
+      "label": "-local",
+      "labelDy": 57,
+      "labelDx": 50
+    },
+    {
+      "id": "channels-to-cli",
+      "from": "channel-input",
+      "to": "cli",
+      "label": "--scan"
+    },
+    {
+      "id": "cli-to-batch",
+      "from": "cli",
+      "to": "batch",
+      "label": "-list / -local"
+    },
+    {
+      "id": "cli-to-watcher",
+      "from": "cli",
+      "to": "watcher",
+      "label": "--scan"
+    },
+    {
+      "id": "batch-to-pipeline",
+      "from": "batch",
+      "to": "pipeline",
+      "label": "Process each item"
+    },
+    {
+      "id": "watcher-to-pipeline",
+      "from": "watcher",
+      "to": "pipeline",
+      "label": "New videos"
+    },
+    {
+      "id": "pipeline-to-youtube",
+      "from": "pipeline",
+      "to": "youtube-service",
+      "label": "Fetch details / captions / audio"
+    },
+    {
+      "id": "pipeline-to-transcriber",
+      "from": "pipeline",
+      "to": "transcriber",
+      "label": "Transcribe if no captions",
+      "labelDy": 40,
+      "labelDx": 80
+    },
+    {
+      "id": "pipeline-to-summary",
+      "from": "pipeline",
+      "to": "summarizer",
+      "label": "Transcript and video details"
+    },
+    {
+      "id": "pipeline-check-db",
+      "from": "pipeline",
+      "to": "dedup-db",
+      "label": "Check / record status",
+      "labelDy": -72
+    },
+    {
+      "id": "db-reuse",
+      "from": "dedup-db",
+      "to": "pipeline",
+      "label": "Reuse existing report",
+      "labelDx": 85
+    },
+    {
+      "id": "summary-to-files",
+      "from": "summarizer",
+      "to": "report-files",
+      "label": "Save summary and report",
+      "labelDy": 24
+    },
+    {
+      "id": "watcher-to-digest",
+      "from": "watcher",
+      "to": "digest",
+      "label": "Scan results",
+      "labelDy": 24
+    },
+    {
+      "id": "digest-read-db",
+      "from": "dedup-db",
+      "to": "digest",
+      "label": "Completion / failure status",
+      "labelDy": 11
+    },
+    {
+      "id": "digest-to-files",
+      "from": "digest",
+      "to": "report-files",
+      "label": "Write daily digest"
+    },
+    {
+      "id": "files-to-github",
+      "from": "report-files",
+      "to": "github",
+      "label": "Upload",
+      "variant": "dashed",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Reuse Rules",
+      "items": [
+        "Reuse when status is COMPLETED and the Markdown report still exists",
+        "--force bypasses deduplication"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Channel Scanning",
+      "items": [
+        "Scan videos from the last two days and process within the time budget",
+        "Write a digest for the scan date; undispatched items at timeout become PENDING_KILLED"
+      ]
+    }
+  ]
+}
