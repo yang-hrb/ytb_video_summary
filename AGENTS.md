@@ -1,75 +1,58 @@
-# AGENTS.md
+# Repository Guide
 
-YouTube transcription & summarization tool. YouTube video/playlist/channel-scan or local MP3 folder → download → Whisper transcribe → configured AI summarize → local report + optional GitHub upload. Podcast and dashboard were deleted (Sep 2026); do not re-add.
+This repository downloads or reads YouTube media, transcribes when needed, creates Markdown summaries, and can upload reports to GitHub. Podcast and dashboard features were removed in September 2026; keep future changes within the current CLI workflow.
 
-## Setup
+## Entrypoints
 
-```bash
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # configure SUMMARY_PROVIDER and its credentials
-```
-
-- Env is read from repo-root `.env` via `load_dotenv()` in `config/settings.py`: `SUMMARY_PROVIDER` (`openrouter_free` by default or `agy_cli`), `OPENROUTER_API_KEY` (required only for `openrouter_free`), `GITHUB_TOKEN` / `GITHUB_REPO` (only needed with `--upload`).
-- `agy_cli` requires the `agy` executable on PATH and an already authenticated CLI account; the headless call waits for its response and fails the summary step on CLI errors.
-
-## The four commands (Hermes entry points)
-
-Canonical flags on all four: `--style detailed --cookies cookies.txt --upload` (omit `--cookies` if no `cookies.txt`; `--cookies-from-browser` defaults to disabled). `--style` defaults to `detailed`.
+Use the CLI examples below as the standard workflows. Full option details come from `python src/main.py --help`.
 
 ```bash
-source venv/bin/activate
-python src/main.py -video "https://youtube.com/watch?v=xxxxx" --style detailed --cookies cookies.txt --upload
-python src/main.py -list "https://youtube.com/playlist?list=xxxxx" --style detailed --cookies cookies.txt --upload
-python src/main.py -local ./audio_files --style detailed --upload
-python src/main.py --scan channellist.txt --style detailed --cookies cookies.txt --upload --max-hours 4
+python src/main.py -video "https://youtube.com/watch?v=VIDEO_ID" --style detailed
+python src/main.py -list "https://youtube.com/playlist?list=PLAYLIST_ID" --style detailed
+python src/main.py -local ./audio_files --style detailed
+python src/main.py --scan channellist.txt --style detailed --max-hours 4
 ```
 
-- `-local PATH` takes a folder of MP3s (e.g. `./audio_files`), not a single file.
-- `--scan FILE` reads `channellist.txt` (one channel URL per line, `#` comments skipped) and only runs videos published in the last 2 days. Daily cron wraps it: `scripts/daily_scan.sh` (`0 4 * * * .../scripts/daily_scan.sh`, `--max-hours 4`, single-instance via `logs/scan.lock`).
-- `--force` / `--no-reuse` forces re-processing even when a COMPLETED report exists.
-- `python src/main.py --help` shows all of the above.
+`-local` expects a folder of MP3 files. `--scan` reads one channel URL per line; blank lines and `#` comments are ignored. Login-restricted videos can use `--cookies FILE`; browser cookies are opt-in. Add `--upload` only when a GitHub upload is intended. Use `--force` or `--no-reuse` to bypass completed-report reuse.
 
-## Dedup DB (the only "done before?" source)
+## Configuration
 
-`logs/ytb_summary_track.db`, single table (auto-created + auto-migrated on first use):
+Install with `pip install -r requirements.txt`; FFmpeg is required for audio processing. Configuration is loaded from the repository-root `.env` by `config/settings.py`.
 
-```sql
-videos(video_id PK, url, channel_url, publish_date, first_seen, md_path,
-       github_url, status, fail_count, last_error, updated_at,
-       uploader, title, duration_seconds)
--- video_id: YouTube 11-char id, or local_<sha256(content)[:16]> for MP3s
---   (first 8 MB + file size hashed; renaming never re-runs, 1 changed byte does)
--- status ∈ {COMPLETED, FAILED, PENDING_KILLED}
-```
+- `SUMMARY_PROVIDER` is `openrouter_free` by default or `agy_cli`. OpenRouter needs `OPENROUTER_API_KEY`; `agy_cli` needs an installed, authenticated `agy` executable.
+- `GITHUB_TOKEN` and `GITHUB_REPO` are only needed for `--upload`.
+- `WHISPER_BACKEND=auto` selects MLX on Apple Silicon and OpenAI Whisper elsewhere.
+- OpenRouter summaries use at most 60,000 transcript characters. `agy_cli` receives the complete SRT.
 
-- COMPLETED hit → old MD path is reused and referenced in the Digest, zero download/transcribe/summarize, zero GitHub writes. `logs/run_track.db` is a frozen legacy backup, never written; do not read it for status.
-- Legacy migration is automatic (`logs/run_track.db` → `logs/run_track_backup.db`, COMPLETED rows imported once via `migrate_legacy_db()`).
+See `.env.example` for supported settings.
 
-## Failures: where to look
+## State and outputs
 
-- `logs/two_time_fail.txt` — one CSV line per video on its 2nd failure: `video_id,url,第一次失败时间,第二次失败时间,错误`.
-- Daily Digest (`generate_daily_summary(target_date=startup day)`) top red section `🔴 Failures` lists all `fail_count >= 2` rows with reasons; below it: Statistics, New Reports, Reused References, Unprocessed (`PENDING_KILLED`, silently retried next scan, `fail_count` untouched).
+`logs/ytb_summary_track.db` is the only source of truth for completed-item reuse. It is initialized automatically and contains the `videos` table. A `COMPLETED` row is reused only when its `md_path` still exists; reuse skips download, transcription, summarization, and upload. `--force` bypasses this check.
 
-## yt-dlp maintenance
+YouTube IDs are the dedup keys for videos. Local MP3 IDs are `local_<sha256[:16]>`, computed from the first 8 MB plus file size; renaming a file does not change its key. Legacy `logs/run_track.db` data is migrated automatically to `logs/run_track_backup.db`; do not use either legacy database to determine current status.
 
-No auto-upgrade. Every 1–2 months run `pip install -U yt-dlp`, verify with one small playlist end-to-end, then pin the working version into `requirements.txt`. If downloads break, first step is always `yt-dlp --version` (expect drift, not a code bug).
+The configured output paths are `output/transcripts/` (SRT), `output/summaries/` (intermediate summaries), and `output/summary/` (reports and daily digests). GitHub reports use `summary/<first-letter>/<uploader>/YYYY_MM/`.
 
-## Architecture (only what's non-obvious)
+## Channel scan behavior
 
-- `src/pipeline.py:ProcessingPipeline` — download→transcribe→summarize→upload orchestrator; `run_youtube` / `run_local_mp3`; zero writes to the legacy DB. Accepts a shared `Transcriber` so batches pre-warm Whisper once (`src/batch.py:_make_shared_transcriber`).
-- `src/channel_watcher.py:execute_scan` — TXT → `dateafter` fetch → one batched dedup-DB status query → `select_scan_videos` (newest-first, stop at first COMPLETED / old / dateless entry; FAILED listed, never auto-rerun) → oldest-first pipeline runs → Digest. `--max-hours` marks pending as `PENDING_KILLED`, Digest still emits.
-- `src/summarizer.py` — OpenRouter transcripts are truncated at `MAX_TRANSCRIPT_CHARS = 60000` (tail dropped, warning logged; no chunking by design); `agy_cli` receives the complete SRT. Provider is selected by `SUMMARY_PROVIDER`; OpenRouter retries 429/5xx and switches models, while `agy_cli` uses the local authenticated CLI and fails the summary step on errors.
-- `src/run_tracker.py` — all dedup-DB access (`find_completed_video`, `mark_video_completed/failed/pending_killed`, `migrate_legacy_db`); `DatabaseManager` (`src/database.py`) for all SQLite (WAL, raises `DatabaseError`).
-- Prompts: `src/prompt_selector.py` + `config/prompt_profile_map.csv` + `config/prompt_types/*.txt`. GitHub path: `summary/<first-letter>/<uploader>/YYYY_MM/file`. Output dirs: `output/transcripts/*.srt`, `output/summaries/`, `output/summary/` (`REPORT_DIR`).
-- Exceptions: `PipelineError` subclasses in `src/exceptions.py`. Logging: `logger = logging.getLogger(__name__)`; console output via `src/cli/display.py`.
+`src/channel_watcher.py:execute_scan` reads the channel list, fetches videos from the last two days, selects eligible videos newest-first, then processes them oldest-first and generates a digest for the scan's start date. Completed, old, and dateless entries stop selection; failed entries are reported and are not automatically rerun by that scan.
 
-## Testing
+`--max-hours` is an in-process time budget. Videos not dispatched before the deadline are marked `PENDING_KILLED` without increasing `fail_count`; a partial digest is still generated. `scripts/daily_scan.sh` runs this workflow with a four-hour budget and optional `cookies.txt`. The script does not install or schedule cron jobs.
 
-```bash
-python -m unittest discover tests   # 84 tests, must stay green
-python -m unittest tests.test_dedup # single module
-```
+`logs/two_time_fail.txt` records a video's second failure. The daily digest includes new reports, reused references, pending items, and failures with `fail_count >= 2`.
 
-- `tests/test_*.py`, `test_<behavior>` methods, `unittest` only. No real network/API calls in tests (mock `requests.post` / fake pipelines).
-- No `venv/bin/uvicorn`, no dashboard tests — both deleted with the dashboard.
+## Code map
+
+- `src/cli/parser.py` and `src/cli/commands.py`: CLI options and dispatch.
+- `src/pipeline.py`: one-video download/transcribe/summarize/upload orchestration and dedup reuse.
+- `src/batch.py`: playlist, local-folder, and batch-file processing; shares a warmed Whisper transcriber across a batch.
+- `src/run_tracker.py`: dedup database access, completion/failure records, and legacy migration.
+- `src/database.py`: SQLite access through `DatabaseManager`.
+- `src/summarizer.py`: provider selection, prompt application, and summary output.
+- `src/prompt_selector.py`, `config/prompt_profile_map.csv`, `config/prompt_types/`: uploader-based prompt selection.
+- `src/daily_summary.py`: Markdown daily digest generation.
+
+## Development
+
+Tests use `unittest` under `tests/test_*.py`. Run them with `python -m unittest discover tests`. Mock network and external-service calls; keep tests independent of real credentials and API calls.

@@ -1,211 +1,102 @@
-# YouTube 视频字幕提取与AI总结工具
+# YouTube 转写与摘要工具
 
-[English Documentation (英文 README)](../README.md)
+[English README](../README.md)
 
-🎥 自动提取 YouTube 视频（包括会员专属内容）的字幕，并使用 AI 生成内容的深度结构化摘要。
+处理 YouTube 视频、播放列表、频道近期更新，或本地文件夹中的 MP3。视频已有字幕时优先读取字幕；需要转写时使用 Whisper。工具生成 Markdown 报告，可选择上传到 GitHub。
 
-## ✨ 核心特性
+## 环境要求
 
-- ✅ 支持 YouTube 公开视频及会员频道专属内容
-- ✅ 自动提取原生字幕，或使用本地 AI Whisper 进行音频转写识别
-- ✅ **Apple Silicon (M系列芯片) 专项优化** - 原生内置 `mlx-whisper`，使得在 Mac M1/M2/M3 等设备的转写速度极速提升。
-- ✅ 高质量 AI 内容总结 (基于 OpenRouter 接口，支持多大模型故障无缝切换，实现高可用 Waterfall)
-- ✅ **动态指令 Prompting** - 基于频道/Up主的类型，动态为其分配最合适的 AI 总结指引指令（比如 Talk show, 教程, 新闻）。
-- ✅ **Web 面板 (FastAPI 驱动)** - 附带一个内置可视化的看板 UI，提交处理列队、查看执行数据、和实现结果的一键 ZIP 批量下载功能。
-- ✅ **智能防断点与 SQLite 状态追踪** - 具有超强容错率！底层的管线状态机允许程序在任何中断（如`TRANSCRIBE_FAILED` 或 `SUMMARIZE_FAILED`）后无损自动恢复，无需重复耗时下载。
-- ✅ **关注列表 Watchlist 与每日摘要 (Daily Digest)** - 可挂载后台守护进程持续监控喜爱的频道，生成汇总报告并自动整理成可读性极强的每日汇总。
-- ✅ 支持 **Apple Podcasts 苹果播客** 及 **本地 MP3 文件夹** 批量处理
-- ✅ 全面支持配置总结内容的输出语言（如：中/英），于 `.env` 配置
-- ✅ 支持文本文档导入混排批处理 (Batch processing)
-- ✅ 支持自动向 GitHub Repo 上传 Markdown 生成文件用于备份与发布
+- Python 3.9 或更新版本
+- FFmpeg
+- OpenRouter API Key，或已安装并完成认证的 `agy` CLI
 
-## 🏗️ 架构改进 (Phase 1-4)
+Apple Silicon 上默认使用 `mlx-whisper`，其他平台默认使用 `openai-whisper`。Whisper 模型可能需要较多内存和磁盘空间。
 
-代码库经过大幅重构，显著提升了可维护性：
+## 安装
 
-### Phase 1: 稳定性
-- **异常层次结构**: 统一的 `PipelineError` 基类，派生具体异常（`DownloadError`, `TranscriptionError` 等）
-- **数据库访问层**: `DatabaseManager` 提供统一的 SQLite 操作，WAL 模式优化
-- **错误处理**: 消除空 except 块，所有错误均被正确记录
-
-### Phase 2: 代码质量
-- **CLI 模块化**: 分离 `src/cli/` 处理参数解析、命令处理和输出显示
-- **类型注解**: 所有公共 API 具有完整的类型提示
-- **批处理**: 可复用的 `BatchProcessor` 实现一致的批处理操作
-
-### Phase 3: 可维护性
-- **集中配置**: 所有设置集中在 `config/settings.py`，带验证功能
-- **统一输出**: `src/cli/display.py` 提供一致的控制台输出
-- **测试覆盖**: 40 个测试，100% 通过率
-
-### Phase 4: 工具链
-- **CI/CD**: GitHub Actions 工作流实现自动化测试
-- **文档**: 更新 AGENTS.md 记录架构决策
-- **性能**: SQLite WAL 模式和缓存优化
-
-## 📊 数据处理流
-
-```text
-输入源 → 处理管线 (由 SQLite 全程追踪) → 输出与存储
-      ↓                       ↓                                 ↓
-   YouTube               1. 下载                         本地存盘
-    播放列表               音频或字幕                    (报告, 字幕流)
-      或者                 2. Whisper 转写                       ↓
-Apple Podcasts           3. AI 总结                     Zip 归档批量导出
-      或者                 4. 保存并上传                   (通过 Dashboard) 
-  本地 MP3                       ↑                              ↓
-      或者                 5. 数据库状态跃迁                 GitHub 远端同步
- Web 列队前端                                                (可选项)
-```
-
-## 📋 系统要求
-
-- Python 3.9+
-- FFmpeg 4.0+
-- 8GB+ 内存 (推荐 16GB)
-- OpenRouter API Key（有大量免费模型可用）
-
-## 🚀 快速上手 (Quick Start)
-
-### 1. 安装系统依赖
-
-**安装 FFmpeg**
-```bash
-# Mac (Homebrew)
-brew install ffmpeg
-```
-
-**安装 Python 依赖配置库**
 ```bash
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 2. 配置环境变量
-```bash
 cp .env.example .env
-# 打开并编辑 .env 文件，把你的 OPENROUTER_API_KEY 填在里面
 ```
 
-### 3. 使用 Web 面板操控 (推荐方法)
+在 `.env` 中设置摘要服务：
 
-启动基于 FastAPI 的应用监控与交互仪表盘，轻松管理作业：
+- `SUMMARY_PROVIDER=openrouter_free`（默认）：填写 `OPENROUTER_API_KEY`。
+- `SUMMARY_PROVIDER=agy_cli`：安装并认证 `agy`，无需 OpenRouter Key。
+
+若要上传 GitHub，还需设置 `GITHUB_TOKEN` 和 `GITHUB_REPO`（格式为 `owner/repository`）。`GITHUB_BRANCH` 默认为 `main`。不传 `--upload` 时，报告只保存在本地。
+
+## 使用方法
+
+在仓库根目录、激活虚拟环境后运行。摘要风格默认为 `detailed`；可用 `--style brief` 选择简要风格。
 
 ```bash
-./start_dashboard.sh
-```
-随后利用浏览器访问 **[http://127.0.0.1:8999/dashboard](http://127.0.0.1:8999/dashboard)** ！
-- 可提交单个视频或是完整的 Playlist 链接。
-- 跟踪错误、成功、耗时的大盘数据。
-- 可以一键下载所打包产生的摘要 Markdown 及对应的 Transcript 字幕文件所构成的 Zip 压缩包。
+# 处理单个 YouTube 视频
+python src/main.py -video "https://youtube.com/watch?v=VIDEO_ID"
 
-### 4. 通过终端命令行 (CLI) 操作
+# 处理播放列表
+python src/main.py -list "https://youtube.com/playlist?list=PLAYLIST_ID"
 
-```bash
-# 基本使用 - 提取并总结单视频
-python src/main.py "https://youtube.com/watch?v=xxxxx"
+# 处理文件夹内的 MP3（不是单个文件）
+python src/main.py -local ./audio_files
 
-# 批量处理某个 YouTube 播放列表
-python src/main.py -list "https://youtube.com/playlist?list=xxxxx"
+# 扫描频道：channellist.txt 中每行一个频道 URL
+python src/main.py --scan channellist.txt --max-hours 4
 
-# Watchlist 守护进程 - 在后台周期性监控指定频道
-python src/main.py --watch-daemon --watch-time 3600
+# 处理后上传报告
+python src/main.py -video "https://youtube.com/watch?v=VIDEO_ID" --upload
 
-# 生成每日看板报告 (Daily Summary)
-python src/main.py --daily-summary
-
-# 中断恢复 - 只重试那些曾失败或中断的任务
-python src/main.py --resume-only
-
-# 诊断与查看系统状态
-python src/main.py --status
-python src/main.py --list-failed
+# 已有完成记录时仍重新处理
+python src/main.py -video "https://youtube.com/watch?v=VIDEO_ID" --force
 ```
 
-## 📖 详细使用指南
+会员或其他需要登录的视频可通过 `--cookies cookies.txt` 使用 Netscape 格式的 Cookie 文件。浏览器 Cookie 默认关闭，可显式传入 `--cookies-from-browser`，并通过 `--browser chrome|edge|firefox` 指定浏览器。
 
-### 命令行参数一览
+其他选项包括：`--batch FILE`（每行一个 URL 或本地路径）、`--status`、`--list-failed`、`--list-resumable`、`--resume-only` 和 `--daily-summary [YYYYMMDD]`。完整列表请运行 `python src/main.py --help`。
 
-```
-输入源参数 (彼此互斥):
-  -video URL                      YouTube 单视频 URL
-  -list URL                       YouTube 播放列表 URL
-  --apple-podcast-single URL      Apple Podcast 播客 URL (提取最新一集)
-  --apple-podcast-list URL        Apple Podcast 播客 URL (提取整个节目集合)
-  -local PATH                     处理本地给定的某个 MP3 文件夹路径
-  --batch FILE                    按照文本批量处理 (文件内可混排上述规则)
+## 频道扫描
 
-诊断与数据库状态操作:
-  --status                        展示大盘的执行追踪数据与统计
-  --list-failed                   列举哪些任务失败，以及报错的具体阶段/原因
-  --list-resumable                列举哪些任务可被恢复再次尝试
-  --resume-only                   重跑所有断点 / 故障流
+`--scan FILE` 按行读取频道 URL，空行和以 `#` 开头的注释会被忽略。程序检查最近两天发布的视频，按从旧到新的顺序处理选中的视频，并生成每日摘要。如果频道列表文件不存在，程序会创建示例文件；请先加入频道 URL 再扫描。
 
-守护与总结操作:
-  --watch-daemon                  将检查程序变为长运行常挂的守护进程
-  --watch-run-once                触发执行一次完整的列表检查
-  --import-watchlist FILE         导入文本文档中的 UP 主进入系统监管
-  --daily-summary                 生成系统截止目前生成的每日播报 Digest
+扫描通过 `logs/scan.lock` 防止重复并发运行。`--max-hours` 设置进程内时间上限；截止时尚未启动的视频会标记为 `PENDING_KILLED`，之后的扫描会再次处理，且当前扫描仍会生成部分结果摘要。`scripts/daily_scan.sh` 可用于定时执行；需自行配置 cron 或系统任务计划。
 
-可选辅助参数:
-  --cookies-from-browser          启用本机浏览器内的 Cookies (免受限制) (强烈推荐)
-  --browser {chrome,edge,firefox} 指定要借用 Cookie 的浏览器
-  --style {brief|detailed}        摘要体裁与篇幅 (默认: detailed)
-  --upload                        执行后将结果自动同步推送给绑定的 GitHub 仓库
-```
-
-### 自动化监控及 GitHub 关联
-如果你在 `.env` 中填写了解锁的 `GITHUB_TOKEN`，`GITHUB_REPO` 及 `GITHUB_BRANCH`，一旦指定了 `--upload` 命令，该项目所产生的 `.md` 摘要报表就会以无感知的形式实时同步并提交推送至你的 GitHub 远端页面上（可用作构建公开资源库或者 Notion 备份）。同时所有的运行动作受 `run_track.db` 追溯保护去重，绝对不会被冗余地重复调用 API 消费额度。
-
-## 📁 输出文件结构与预览
+## 输出与去重
 
 ```text
 output/
-├── transcripts/
-│   └── [video_id]_transcript.srt      # 处理出来的源语字幕文档
-├── summaries/
-│   └── [video_id]_summary.md          # 内部处理摘要
-├── reports/
-│   └── [时间戳]_[频道主]_[视频名].md  # 最终定版带有版式的排版报文
-└── zips/
-    └── summary_bundle_job_*.zip       # 面板(Dashboard)提供给前端下发的打包集
+├── transcripts/       # SRT 字幕/转写文本
+├── summaries/         # 中间摘要
+└── summary/           # 最终 Markdown 报告和 daily_digest/
 
 logs/
-└── ytb_summarizer_[时间戳].log     # 流水日志文件
-run_track.db                           # SQLite 状态追迹核心文件
+├── ytb_summary_track.db
+├── two_time_fail.txt
+└── *.log
 ```
 
-## ⚙️ 个性化配置 (.env)
+`logs/ytb_summary_track.db` 是完成记录复用的唯一依据。只有数据库中的报告路径仍存在时，`COMPLETED` 记录才会被复用；复用后不会重新下载、转写、总结或上传。YouTube 视频使用视频 ID 去重；本地 MP3 使用前 8 MB 内容和文件大小生成 ID，因此重命名不会触发重复处理。使用 `--force` 或别名 `--no-reuse` 可跳过去重。
 
-常用的个性化定制可调节参数：
-- `WHISPER_BACKEND`: 设为 `auto` 则能在 M系列设备上点燃极速的 `mlx-whisper`，未满足时启用标准的 `openai` whisper 模式。
-- `SUMMARY_LANGUAGE`: 控制 AI 产生的对应语言，`zh` 为中文，`en` 为英语。
-- `OPENROUTER_MODEL` & `MODEL_PRIORITY_{1..3}`: 创建健壮的模型熔断机制（瀑布接力），当主模型在遇到 429 或 500 断网限流时，程序能秒接预案模型平滑续写不中断。
+首次初始化时，程序可能将旧的 `logs/run_track.db` 迁移并改名为 `logs/run_track_backup.db`；新状态写入 `ytb_summary_track.db`。
 
-## 🔮 研发路线 (Future Plans)
+## 配置
 
-- [x] 批量支持与 YouTube 列表流支持
-- [x] 本地媒体，及聚合播客的支持 
-- [x] 时间戳集中的日志系统 
-- [x] 远端 GitHub Repo 的对接集成
-- [x] 高级的 SQLite 追迹状态机引擎与智能断点恢复 `Smart Resume`
-- [x] 可视化前端 Web 交互 Web UI 
-- [x] 智能频道特征预判，提供定制 Prompt 及 Daily Digest 分发
-- [ ] 更丰富的全媒体矩阵引入（如 Bilibili 或 Vimeo 等平台）
-- [ ] 更多的自然语言翻译特色映射支持
-- [ ] 转写为 PDF 或 Word 规格下发
-- [ ] 提供基于 FFmpeg 的高阶视频智能打点截图插帧支持
+常用 `.env` 设置：
 
----
+- `SUMMARY_PROVIDER`、`OPENROUTER_API_KEY`、`MODEL_PRIORITY_1` 至 `MODEL_PRIORITY_3` 和 `MODEL_FALLBACK`：控制摘要服务。OpenRouter 会按模型优先级尝试，并对临时错误重试；`agy_cli` 使用完整 SRT。
+- `SUMMARY_LANGUAGE`：摘要语言，支持 `zh` 和 `en`，默认为 `zh`。`--style` 控制 `brief` 或 `detailed` 风格。
+- `WHISPER_MODEL`、`WHISPER_LANGUAGE` 和 `WHISPER_BACKEND`：控制转写。`WHISPER_BACKEND=auto` 会在 Apple Silicon 上选择 MLX，其他平台选择 OpenAI Whisper。
+- `GITHUB_TOKEN`、`GITHUB_REPO` 和 `GITHUB_BRANCH`：配置可选的 GitHub 上传。
 
-**最终更新时间**: 2026-03-20
+更多选项和默认值见 `.env.example`。OpenRouter 摘要最多使用 60,000 个转写字符，超出的尾部会被截掉并记录警告；`agy_cli` 使用完整 SRT。
 
-## 📝 近期重要升级概要 (v2.1 / 2026-03)
+## 开发
 
-针对了系统的健壮性，使用便利度，和可视化反馈进行了从 第1相至第4相 (Phase 1-4) 量级脱胎换骨的调整：
-- ✅ **可视化 Dashboard 交互板**: 基于 FastAPI 承接引擎的前端，可轻易掌控批处理，查阅图表并将战利品打包为 ZIP 供本地检阅。
-- ✅ **SQLite 管线状态机**: 取代松散逻辑。目前严格追踪每一次的流转 (`DOWNLOAD`, `TRANSCRIBE`, `SUMMARIZE`)。即使由于断点、网络或 API 崩坏导致被掐断，现在均能利用 `--resume-only` 基于残破的数据接力完工。
-- ✅ **通道关注及日报体系**: 构建了针对创作者流更新的精准捕获体系。使用独立数据库防重排。同时结合强大的日志清洗每日凌晨吐出一份精致悦目的 `daily_digest` 纯文本快报。
-- ✅ **定制分析逻辑 (Dynamic Prompts)**: 抛弃通用话术，采用字典注入机制针对不同类型的播放者（科普向，游戏向，实时直播向）给出最契合灵魂的引导指令总结模版以确保萃取的信息极具含金量。
-- ✅ **释放 Apple 芯片天性**: 底层完成封装改写，现在原生地注入启动 `mlx-whisper`。在 Apple 硬件下性能飙升，完全规避因为缺乏加速引发的龟速卡顿。 
+运行单元测试：
+
+```bash
+python -m unittest discover tests
+```
+
+测试使用 `unittest`；网络和外部服务调用应使用 mock。辅助诊断脚本见 [scripts/README.md](../scripts/README.md)。
