@@ -1,0 +1,6 @@
+# Channel watchlist — one channel URL per line.
+# Blank lines and lines starting with # are skipped. This file is hand-maintained.
+# --scan only picks up videos published in the last 2 days.
+# Examples (uncomment and replace with channels you follow):
+# https://www.youtube.com/@SomeChannel
+# https://www.youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxx

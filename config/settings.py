@@ -7,6 +7,8 @@ load_dotenv()
 
 
 class Config:
+    SUMMARY_PROVIDER = os.getenv('SUMMARY_PROVIDER', 'openrouter_free').strip().lower()
+
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
     OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openrouter/free')
@@ -73,7 +75,9 @@ class Config:
 
     @classmethod
     def validate(cls) -> bool:
-        if not cls.OPENROUTER_API_KEY:
+        if cls.SUMMARY_PROVIDER not in ('openrouter_free', 'agy_cli'):
+            raise ValueError("SUMMARY_PROVIDER must be 'openrouter_free' or 'agy_cli'")
+        if cls.SUMMARY_PROVIDER == 'openrouter_free' and not cls.OPENROUTER_API_KEY:
             raise ValueError("Set OPENROUTER_API_KEY in .env file")
         if cls.HTTP_TIMEOUT < 1:
             raise ValueError("HTTP_TIMEOUT must be positive")

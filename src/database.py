@@ -151,11 +151,6 @@ class DatabaseManager:
         result = self.execute(f"PRAGMA table_info({table_name})")
         return [row['name'] for row in result]
 
-    def begin_transaction(self):
-        """开始事务（显式）"""
-        with self.get_connection() as conn:
-            conn.execute("BEGIN")
-
     def vacuum(self):
         """优化数据库（清理和碎片整理）"""
         with self.get_connection() as conn:

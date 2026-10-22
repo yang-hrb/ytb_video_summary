@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "YouTube 视频摘要工具架构",
+    "locale": "zh-CN",
+    "output": ".archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:yang-hrb/ytb_video_summary.git",
+      "provider": "github",
+      "link_mode": "local-only",
+      "revision": "6017b19a4cf99c4c11b5033d1437ab4d0810308c"
+    }
+  },
+  "components": [
+    {
+      "id": "youtube-input",
+      "type": "external",
+      "label": "YouTube 视频 / 播放列表",
+      "sublabel": "-video · -list",
+      "pos": [20, 110],
+      "size": [180, 64],
+      "sources": [{"path": "src/cli/commands.py", "line": 229, "end_line": 255}]
+    },
+    {
+      "id": "local-input",
+      "type": "external",
+      "label": "本地 MP3 文件夹",
+      "sublabel": "-local",
+      "pos": [20, 310],
+      "size": [180, 64],
+      "sources": [{"path": "src/cli/commands.py", "line": 209, "end_line": 227}]
+    },
+    {
+      "id": "channel-input",
+      "type": "external",
+      "label": "频道列表",
+      "sublabel": "--scan · 每行一个频道 URL",
+      "pos": [20, 510],
+      "size": [180, 64],
+      "sources": [{"path": "src/channel_watcher.py", "line": 236, "end_line": 243}]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI 命令分发",
+      "sublabel": "src/main.py → CommandHandler",
+      "pos": [235, 305],
+      "size": [195, 72],
+      "sources": [
+        {"path": "src/main.py", "line": 164, "end_line": 169},
+        {"path": "src/cli/commands.py", "line": 34, "end_line": 75}
+      ]
+    },
+    {
+      "id": "batch",
+      "type": "backend",
+      "label": "批处理",
+      "sublabel": "播放列表 · 本地 MP3",
+      "pos": [465, 145],
+      "size": [190, 72],
+      "sources": [
+        {"path": "src/main.py", "line": 82, "end_line": 113},
+        {"path": "src/batch.py", "line": 101, "end_line": 132}
+      ]
+    },
+    {
+      "id": "watcher",
+      "type": "backend",
+      "label": "频道扫描",
+      "sublabel": "筛选新视频 · --max-hours",
+      "pos": [465, 455],
+      "size": [190, 72],
+      "sources": [{"path": "src/channel_watcher.py", "line": 214, "end_line": 257}]
+    },
+    {
+      "id": "pipeline",
+      "type": "backend",
+      "label": "ProcessingPipeline",
+      "sublabel": "去重 → 获取媒体 → 转录 → 摘要",
+      "pos": [705, 295],
+      "size": [210, 78],
+      "sources": [
+        {"path": "src/pipeline.py", "line": 155, "end_line": 253},
+        {"path": "src/pipeline.py", "line": 275, "end_line": 299}
+      ]
+    },
+    {
+      "id": "youtube-service",
+      "type": "external",
+      "label": "YouTube",
+      "sublabel": "字幕优先；无字幕时下载音频",
+      "pos": [960, 90],
+      "size": [190, 72],
+      "sources": [{"path": "src/youtube_handler.py", "line": 464, "end_line": 487}]
+    },
+    {
+      "id": "transcriber",
+      "type": "backend",
+      "label": "Whisper 转录",
+      "sublabel": "音频 → 文本与 SRT",
+      "pos": [960, 245],
+      "size": [190, 72],
+      "sources": [
+        {"path": "src/transcriber.py", "line": 134, "end_line": 178},
+        {"path": "src/pipeline.py", "line": 192, "end_line": 220}
+      ]
+    },
+    {
+      "id": "summarizer",
+      "type": "backend",
+      "label": "摘要与提示词",
+      "sublabel": "OpenRouter / agy_cli · 按上传者选提示词",
+      "pos": [960, 410],
+      "size": [190, 82],
+      "sources": [
+        {"path": "src/summarizer.py", "line": 376, "end_line": 420},
+        {"path": "src/summarizer.py", "line": 224, "end_line": 236}
+      ]
+    },
+    {
+      "id": "dedup-db",
+      "type": "database",
+      "label": "SQLite 去重状态",
+      "sublabel": "logs/ytb_summary_track.db · videos",
+      "pos": [705, 520],
+      "size": [210, 72],
+      "sources": [
+        {"path": "src/run_tracker.py", "line": 67, "end_line": 68},
+        {"path": "src/run_tracker.py", "line": 99, "end_line": 107},
+        {"path": "src/pipeline.py", "line": 81, "end_line": 105}
+      ]
+    },
+    {
+      "id": "report-files",
+      "type": "database",
+      "label": "输出文件",
+      "sublabel": "SRT · Markdown 报告 · 每日日报",
+      "pos": [960, 575],
+      "size": [190, 72],
+      "sources": [
+        {"path": "src/transcriber.py", "line": 159, "end_line": 178},
+        {"path": "src/summarizer.py", "line": 403, "end_line": 421},
+        {"path": "src/daily_summary.py", "line": 119, "end_line": 124}
+      ]
+    },
+    {
+      "id": "digest",
+      "type": "backend",
+      "label": "频道扫描日报",
+      "sublabel": "新报告 · 复用 · 待处理 · 失败",
+      "pos": [465, 625],
+      "size": [190, 72],
+      "sources": [{"path": "src/daily_summary.py", "line": 30, "end_line": 77}]
+    },
+    {
+      "id": "github",
+      "type": "cloud",
+      "label": "GitHub 仓库",
+      "sublabel": "可选：--upload",
+      "pos": [960, 735],
+      "size": [190, 64],
+      "sources": [{"path": "src/pipeline.py", "line": 137, "end_line": 149}]
+    }
+  ],
+  "connections": [
+    {"id": "video-to-cli", "from": "youtube-input", "to": "cli", "label": "命令参数"},
+    {"id": "local-to-cli", "from": "local-input", "to": "cli", "label": "命令参数"},
+    {"id": "channels-to-cli", "from": "channel-input", "to": "cli", "label": "--scan"},
+    {"id": "cli-to-batch", "from": "cli", "to": "batch", "label": "-list / -local"},
+    {"id": "cli-to-watcher", "from": "cli", "to": "watcher", "label": "--scan"},
+    {"id": "batch-to-pipeline", "from": "batch", "to": "pipeline", "label": "逐项处理"},
+    {"id": "watcher-to-pipeline", "from": "watcher", "to": "pipeline", "label": "新视频"},
+    {"id": "pipeline-to-youtube", "from": "pipeline", "to": "youtube-service", "label": "获取视频信息 / 字幕 / 音频"},
+    {"id": "pipeline-to-transcriber", "from": "pipeline", "to": "transcriber", "label": "无字幕时转录音频"},
+    {"id": "pipeline-to-summary", "from": "pipeline", "to": "summarizer", "label": "转录文本与视频信息"},
+    {"id": "pipeline-check-db", "from": "pipeline", "to": "dedup-db", "label": "查询已完成项；记录结果"},
+    {"id": "db-reuse", "from": "dedup-db", "to": "pipeline", "label": "报告仍存在则复用"},
+    {"id": "summary-to-files", "from": "summarizer", "to": "report-files", "label": "保存摘要与报告"},
+    {"id": "watcher-to-digest", "from": "watcher", "to": "digest", "label": "本次扫描结果"},
+    {"id": "digest-read-db", "from": "dedup-db", "to": "digest", "label": "完成 / 失败 / 待处理记录"},
+    {"id": "digest-to-files", "from": "digest", "to": "report-files", "label": "写入日报"},
+    {"id": "files-to-github", "from": "report-files", "to": "github", "label": "可选上传", "variant": "dashed"}
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "复用规则",
+      "items": ["COMPLETED 且报告 Markdown 文件仍存在时复用", "--force 可绕过去重"]
+    },
+    {
+      "dot": "amber",
+      "title": "频道扫描",
+      "items": ["扫描频道最近两天的视频并按时间预算处理", "扫描结束生成本次日期的日报；超时未启动项记为 PENDING_KILLED"]
+    }
+  ]
+}

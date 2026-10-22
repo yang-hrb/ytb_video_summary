@@ -63,6 +63,8 @@ def setup_logging(log_dir: Path = None) -> logging.Logger:
 
     # Create root logger
     logger = logging.getLogger('ytb_summarizer')
+    if logger.handlers:
+        return logger
     logger.setLevel(logging.INFO)
 
     # Remove existing handlers to avoid duplicates

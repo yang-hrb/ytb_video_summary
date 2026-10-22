@@ -1,3 +1,5 @@
+import csv
+import hashlib
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -8,6 +10,283 @@ from src.database import DatabaseManager
 from src.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------
+# Issue 02: dedup store — single source of truth for "done or not".
+# New DB logs/ytb_summary_track.db, single table `videos`.
+# Reads/writes go through the existing DatabaseManager (no new wrapper).
+# Status vocabulary is this one FAILED_STATUSES tuple (no Enum).
+# ------------------------------------------------------------------
+
+FAILED_STATUSES = (
+    'DOWNLOAD_FAILED', 'TRANSCRIBE_FAILED',
+    'SUMMARIZE_FAILED', 'SUMMARY_FAILED',
+    'UPLOAD_FAILED', 'failed',
+)
+
+NEW_TRACK_DB_NAME = "ytb_summary_track.db"
+OLD_TRACK_DB_NAME = "run_track.db"
+BACKUP_TRACK_DB_NAME = "run_track_backup.db"
+TWO_TIME_FAIL_NAME = "two_time_fail.txt"
+
+# ponytail: cap hashing at head MB + file size so multi-GB MP3s stay cheap
+LOCAL_HASH_HEAD_MB = 8
+
+_VIDEOS_DDL = """
+CREATE TABLE IF NOT EXISTS videos (
+    video_id TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    channel_url TEXT,
+    publish_date TEXT,
+    first_seen TEXT NOT NULL,
+    md_path TEXT,
+    github_url TEXT,
+    status TEXT NOT NULL,
+    fail_count INTEGER DEFAULT 0,
+    last_error TEXT,
+    updated_at TEXT NOT NULL,
+    uploader TEXT,
+    title TEXT,
+    duration_seconds INTEGER DEFAULT 0
+)
+"""
+
+# Columns added after the issue-02 DDL (spec §6.1: digest reads these directly).
+_VIDEOS_EXTRA_COLUMNS = [
+    ("uploader", "TEXT"),
+    ("title", "TEXT"),
+    ("duration_seconds", "INTEGER DEFAULT 0"),
+]
+
+
+def two_time_fail_path() -> Path:
+    return config.LOG_DIR / TWO_TIME_FAIL_NAME
+
+
+def dedup_db_path() -> Path:
+    return config.LOG_DIR / NEW_TRACK_DB_NAME
+
+
+def _now_str() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def init_videos_table(db: DatabaseManager):
+    db.execute_update(_VIDEOS_DDL)
+    cols = {row['name'] for row in db.execute("PRAGMA table_info(videos)")}
+    for col_name, col_def in _VIDEOS_EXTRA_COLUMNS:
+        if col_name not in cols:
+            db.execute_update(f"ALTER TABLE videos ADD COLUMN {col_name} {col_def}")
+
+
+def local_content_id(mp3_path: Path, head_mb: int = LOCAL_HASH_HEAD_MB) -> str:
+    """Stable content-based id: local_<sha256[:16]>. Rename-proof, content-sensitive."""
+    h = hashlib.sha256()
+    size = 0
+    limit = head_mb * 1024 * 1024
+    with open(mp3_path, 'rb') as f:
+        while size < limit:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+            h.update(chunk)
+            size += len(chunk)
+    h.update(str(Path(mp3_path).stat().st_size).encode())
+    return f"local_{h.hexdigest()[:16]}"
+
+
+def get_dedup_db(db_path: Optional[Path] = None) -> DatabaseManager:
+    """Open the new dedup DB (creating videos table + running migration as needed)."""
+    path = Path(db_path) if db_path else dedup_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    db = DatabaseManager(path)
+    init_videos_table(db)
+    if path == dedup_db_path():
+        migrate_legacy_db()
+    return db
+
+
+def find_completed_video(db: DatabaseManager, video_id: str) -> Optional[Dict]:
+    if not video_id:
+        return None
+    return db.execute_one(
+        "SELECT * FROM videos WHERE video_id = ? AND status = 'COMPLETED'",
+        (video_id,),
+    )
+
+
+def mark_video_completed(db: DatabaseManager, video_id: str, url: str,
+                          md_path: Optional[str] = None,
+                          github_url: Optional[str] = None,
+                          channel_url: Optional[str] = None,
+                          publish_date: Optional[str] = None,
+                          uploader: Optional[str] = None,
+                          title: Optional[str] = None,
+                          duration_seconds: Optional[int] = None):
+    now = _now_str()
+    db.execute_update(
+        "INSERT OR IGNORE INTO videos (video_id, url, first_seen, status, updated_at)"
+        " VALUES (?, ?, ?, 'COMPLETED', ?)",
+        (video_id, url, now, now),
+    )
+    db.execute_update(
+        "UPDATE videos SET url = ?, md_path = ?, github_url = ?, channel_url = ?,"
+        " publish_date = ?, uploader = ?, title = ?, duration_seconds = ?,"
+        " status = 'COMPLETED', last_error = NULL, updated_at = ?"
+        " WHERE video_id = ?",
+        (url, md_path, github_url, channel_url, publish_date, uploader, title,
+         duration_seconds, now, video_id),
+    )
+
+
+def mark_video_failed(db: DatabaseManager, video_id: str, url: str, error: str) -> int:
+    """Record a FAILED run, bumping fail_count. Returns the new fail_count.
+
+    On the 2nd failure (fail_count == 2) appends one stdlib-csv line to
+    logs/two_time_fail.txt: video_id,url,第一次失败时间,第二次失败时间,错误.
+    """
+    now = _now_str()
+    prev = db.execute_one("SELECT fail_count, updated_at FROM videos WHERE video_id = ?",
+                          (video_id,))
+    prev_fail_time = prev.get('updated_at') if prev else None
+    db.execute_update(
+        "INSERT OR IGNORE INTO videos (video_id, url, first_seen, status, fail_count, updated_at)"
+        " VALUES (?, ?, ?, 'FAILED', 0, ?)",
+        (video_id, url, now, now),
+    )
+    db.execute_update(
+        "UPDATE videos SET url = ?, status = 'FAILED',"
+        " fail_count = COALESCE(fail_count, 0) + 1, last_error = ?, updated_at = ?"
+        " WHERE video_id = ?",
+        (url, error, now, video_id),
+    )
+    row = db.execute_one("SELECT fail_count FROM videos WHERE video_id = ?", (video_id,))
+    fail_count = (row.get('fail_count') if row else None) or 0
+    if fail_count == 2:
+        _append_two_time_fail(video_id, url, prev_fail_time or now, now, error)
+    return fail_count
+
+
+def _append_two_time_fail(video_id: str, url: str, first_fail: str, second_fail: str,
+                          error: str):
+    """Append one CSV line for a twice-failed video (spec §6.3)."""
+    try:
+        path = two_time_fail_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'a', encoding='utf-8', newline='') as f:
+            csv.writer(f).writerow([video_id, url, first_fail, second_fail, error])
+    except OSError as e:
+        logger.warning("Failed to write %s: %s", TWO_TIME_FAIL_NAME, e)
+
+
+def mark_video_pending_killed(db: DatabaseManager, video_id: str, url: str):
+    """Mark a timeout-killed video as not-run: fail_count untouched (spec §5).
+
+    Never clobbers a COMPLETED row (late finish wins over the killer).
+    """
+    now = _now_str()
+    db.execute_update(
+        "INSERT OR IGNORE INTO videos (video_id, url, first_seen, status, fail_count, updated_at)"
+        " VALUES (?, ?, ?, 'PENDING_KILLED', 0, ?)",
+        (video_id, url, now, now),
+    )
+    db.execute_update(
+        "UPDATE videos SET url = ?, status = 'PENDING_KILLED', updated_at = ?"
+        " WHERE video_id = ? AND status != 'COMPLETED'",
+        (url, now, video_id),
+    )
+
+
+def migrate_legacy_db(new_db_path: Optional[Path] = None,
+                      old_db_path: Optional[Path] = None,
+                      backup_db_path: Optional[Path] = None) -> dict:
+    """Rename old DB to backup and import COMPLETED rows once. Idempotent.
+
+    - old exists, backup missing → rename (incl. -wal/-shm sidecars), import from backup.
+    - both exist → import from old too, then remove redundant old file.
+    - only backup exists → import only when videos table is empty (backup is frozen).
+    - neither exists → no-op (compatible with fresh checkouts).
+    """
+    new_path = Path(new_db_path) if new_db_path else dedup_db_path()
+    old_path = Path(old_db_path) if old_db_path else config.LOG_DIR / OLD_TRACK_DB_NAME
+    bak_path = Path(backup_db_path) if backup_db_path else config.LOG_DIR / BACKUP_TRACK_DB_NAME
+    stats = {'renamed': False, 'imported': 0}
+
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    new_db = DatabaseManager(new_path)
+    init_videos_table(new_db)
+
+    sources: List[Path] = []
+    if old_path.exists():
+        if not bak_path.exists():
+            old_path.rename(bak_path)
+            for suffix in ("-wal", "-shm"):
+                sidecar = Path(str(old_path) + suffix)
+                if sidecar.exists():
+                    sidecar.rename(Path(str(bak_path) + suffix))
+            stats['renamed'] = True
+        sources.append(bak_path if bak_path.exists() else old_path)
+        if bak_path.exists() and old_path.exists() and bak_path != old_path:
+            # Both present (e.g. legacy write re-created old): import then drop the redundant copy.
+            if old_path not in sources:
+                sources.append(old_path)
+    elif bak_path.exists():
+        count = new_db.execute_one("SELECT COUNT(*) AS n FROM videos")
+        if not count or count.get('n', 0) == 0:
+            sources.append(bak_path)
+
+    for src in sources:
+        stats['imported'] += _import_completed_from(src, new_db)
+        if src == old_path and bak_path.exists():
+            try:
+                old_path.unlink()
+            except OSError:
+                pass
+    return stats
+
+
+def _import_completed_from(src: Path, new_db: DatabaseManager) -> int:
+    try:
+        src_db = DatabaseManager(src)
+        cols = {row['name'] for row in src_db.execute("PRAGMA table_info(runs)")}
+    except DatabaseError as e:
+        logger.warning("Skipping legacy import from %s: %s", src, e)
+        return 0
+    if 'identifier' not in cols:
+        return 0
+    select_cols = ['identifier', 'url_or_path', 'started_at', 'updated_at']
+    for optional in ('report_path', 'github_url'):
+        if optional in cols:
+            select_cols.append(optional)
+    try:
+        rows = src_db.execute(
+            f"SELECT {', '.join(select_cols)} FROM runs WHERE status = 'COMPLETED'"
+        )
+    except DatabaseError as e:
+        logger.warning("Skipping legacy import from %s: %s", src, e)
+        return 0
+    imported = 0
+    for r in rows:
+        vid = r.get('identifier')
+        if not vid:
+            continue
+        first_seen = r.get('started_at') or r.get('updated_at') or _now_str()
+        try:
+            new_db.execute_update(
+                "INSERT OR IGNORE INTO videos"
+                " (video_id, url, first_seen, md_path, github_url, status, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, 'COMPLETED', ?)",
+                (vid, r.get('url_or_path') or '', str(first_seen),
+                 r.get('report_path'), r.get('github_url'),
+                 str(r.get('updated_at') or first_seen)),
+            )
+            imported += 1
+        except DatabaseError as e:
+            logger.warning("Legacy row import failed for %s: %s", vid, e)
+    if imported:
+        logger.info("Imported %d COMPLETED row(s) from %s", imported, src)
+    return imported
 
 
 class RunTracker:
@@ -293,17 +572,12 @@ class RunTracker:
             return []
 
     def get_failed_runs(self, limit: Optional[int] = None) -> list:
-        failed_statuses = (
-            'DOWNLOAD_FAILED', 'TRANSCRIBE_FAILED',
-            'SUMMARIZE_FAILED', 'SUMMARY_FAILED',
-            'UPLOAD_FAILED', 'failed',
-        )
-        placeholders = ",".join("?" for _ in failed_statuses)
+        placeholders = ",".join("?" for _ in FAILED_STATUSES)
         try:
             query = f"SELECT * FROM runs WHERE status IN ({placeholders}) ORDER BY started_at DESC"
             if limit:
                 query += f" LIMIT {limit}"
-            return self.db.execute(query, failed_statuses)
+            return self.db.execute(query, FAILED_STATUSES)
         except DatabaseError as e:
             logger.error("Failed to get failed runs: %s", e)
             return []

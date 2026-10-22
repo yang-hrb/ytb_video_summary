@@ -9,7 +9,7 @@ from typing import Optional
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Audio/Video Transcription & Summarization Tool - Supports YouTube, Apple Podcasts, and Local MP3',
+        description='Audio/Video Transcription & Summarization Tool - Supports YouTube and Local MP3',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -21,19 +21,18 @@ Examples:
   python src/main.py -list "https://youtube.com/playlist?list=xxxxx"
   python src/main.py -list "https://youtube.com/watch?v=xxxxx&list=xxxxx"
 
-  # Process single Apple Podcasts episode (latest)
-  python src/main.py --apple-podcast-single "https://podcasts.apple.com/us/podcast/podcast-name/id123456789"
-
-  # Process all episodes from Apple Podcasts show
-  python src/main.py --apple-podcast-list "https://podcasts.apple.com/us/podcast/podcast-name/id123456789"
-
   # Process local MP3 folder
   python src/main.py -local /path/to/mp3/folder
   python src/main.py -local ./audio_files --style detailed
 
-  # Process batch input file (mix of URLs and paths)
-  python src/main.py --batch input.txt
-  python src/main.py --batch input.txt --style brief --upload
+   # Process batch input file (mix of URLs and paths)
+   python src/main.py --batch input.txt
+   python src/main.py --batch input.txt --style brief --upload
+
+    # Scan channels for videos published in the last 2 days
+    python src/main.py --scan channellist.txt
+    python src/main.py --scan channellist.txt --upload
+    python src/main.py --scan channellist.txt --upload --max-hours 4
         """
     )
 
@@ -54,20 +53,6 @@ Examples:
     )
 
     input_group.add_argument(
-        '--apple-podcast-single',
-        type=str,
-        metavar='URL',
-        help='Apple Podcasts URL (process latest episode only)'
-    )
-
-    input_group.add_argument(
-        '--apple-podcast-list',
-        type=str,
-        metavar='URL',
-        help='Apple Podcasts URL (process all episodes from show)'
-    )
-
-    input_group.add_argument(
         '-local',
         type=str,
         metavar='PATH',
@@ -79,6 +64,13 @@ Examples:
         type=str,
         metavar='FILE',
         help='Batch input file (one URL or path per line)'
+    )
+
+    input_group.add_argument(
+        '--scan',
+        type=str,
+        metavar='FILE',
+        help='Channel list file (one channel URL per line); scan videos published in the last 2 days'
     )
 
     diag_group = parser.add_argument_group('diagnostics')
@@ -147,6 +139,27 @@ Examples:
         '--upload',
         action='store_true',
         help='Upload report files to GitHub repository'
+    )
+
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Force re-processing even when a COMPLETED report exists in the dedup DB'
+    )
+
+    parser.add_argument(
+        '--max-hours',
+        type=float,
+        default=None,
+        metavar='HOURS',
+        help='Time budget for --scan (e.g. 4): stop dispatching new videos after HOURS,'
+             ' mark the rest PENDING_KILLED, and still emit the digest'
+    )
+
+    parser.add_argument(
+        '--no-reuse',
+        action='store_true',
+        help='Alias for --force: never reuse existing COMPLETED reports'
     )
 
     watcher_group = parser.add_argument_group('watcher')

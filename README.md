@@ -1,212 +1,102 @@
-# YouTube Video Transcription & Summarization Tool
+# YouTube Transcription and Summarization
 
-[中文文档 (Chinese README)](doc/README_zh.md)
+[Chinese README](doc/README_zh.md)
 
-🎥 Automatically transcribe YouTube videos (including membership content) to text and generate AI-powered summaries
+Process YouTube videos and playlists, scan a list of channels for recent uploads, or summarize MP3 files from a local folder. The tool uses existing YouTube subtitles when available and Whisper when transcription is needed, then writes a Markdown report locally and can optionally upload it to GitHub.
 
-## ✨ Features
+## Requirements
 
-- ✅ Support for YouTube public and membership videos
-- ✅ Automatic subtitle extraction or AI transcription (Whisper)
-- ✅ **Apple Silicon Optimization** - Native support for `mlx-whisper` for lightning-fast transcription on M1/M2/M3 Macs.
-- ✅ AI-powered video content summarization (uses OpenRouter with a waterfall of models)
-- ✅ **Dynamic Prompting** - Uses specific AI prompts based on the uploader/channel to tailor summaries.
-- ✅ **Web Dashboard UI (FastAPI)** - Built-in graphical interface to submit jobs, monitor execution, and download ZIP bundles containing reports and transcripts.
-- ✅ **Smart Resume & State Tracking** - SQLite-backed pipeline state machine allows safely resuming failed jobs (e.g., from `TRANSCRIBE_FAILED` or `SUMMARIZE_FAILED`) without redownloading.
-- ✅ **Watchlist & Daily Digest** - Background daemon to automatically track new videos from your favorite channels and generate a daily Markdown digest report.
-- ✅ **Apple Podcasts & Local MP3** support
-- ✅ Configurable summary language (Chinese/English) via `.env`
-- ✅ Batch processing from a text file or YouTube playlist
-- ✅ Optional automated GitHub uploads for backup
+- Python 3.9 or newer
+- FFmpeg
+- An OpenRouter API key, or an installed and authenticated `agy` CLI
 
-## 🏗️ Architecture (Phase 1-4 Improvements)
+Whisper uses `mlx-whisper` automatically on Apple Silicon and `openai-whisper` on other platforms. Transcription models can require substantial memory and disk space.
 
-The codebase has been significantly refactored for better maintainability:
+## Setup
 
-### Phase 1: Stability
-- **Exception Hierarchy**: Unified `PipelineError` base class with specific exceptions (`DownloadError`, `TranscriptionError`, etc.)
-- **Database Layer**: `DatabaseManager` for consistent SQLite operations with WAL mode optimization
-- **Error Handling**: No empty except blocks; all errors properly logged
-
-### Phase 2: Code Quality
-- **CLI Module**: Separated `src/cli/` for argument parsing, command handling, and display
-- **Type Annotations**: Complete type hints on all public APIs
-- **Batch Processing**: Reusable `BatchProcessor` for consistent batch operations
-
-### Phase 3: Maintainability
-- **Centralized Config**: All settings in `config/settings.py` with validation
-- **Unified Output**: `src/cli/display.py` for consistent console output
-- **Test Coverage**: 40 tests with 100% pass rate
-
-### Phase 4: Tooling
-- **CI/CD**: GitHub Actions workflow for automated testing
-- **Documentation**: Updated AGENTS.md with architecture decisions
-- **Performance**: SQLite WAL mode and cache optimization
-
-## 📊 Data Workflow
-
-```
-Input Sources → Processing Pipeline (SQLite Tracked) → Output & Storage
-      ↓                       ↓                                 ↓
-   YouTube               1. Download                     Local Files
-   Playlist                Audio/Subs                 (Reports, Transcripts)
-      or                 2. Transcription                       ↓
-Apple Podcasts           3. AI Summary                    Zip Bundle Export
-      or                 4. Save & Upload               (via Dashboard) 
-   Local MP3                     ↑                              ↓
-     or                  5. Status Updated                GitHub Upload
-  Web Job Queue                                            (optional)
-```
-
-## 📋 System Requirements
-
-- Python 3.9+
-- FFmpeg 4.0+
-- 8GB+ RAM (16GB recommended)
-- OpenRouter API Key for summarization (free options available)
-
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-
-**Install FFmpeg**
-```bash
-# Mac
-brew install ffmpeg
-```
-
-**Install Python Dependencies**
 ```bash
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 2. Configure Environment Variables
-```bash
 cp .env.example .env
-# Edit .env file and configure your OPENROUTER_API_KEY
 ```
 
-### 3. Run the Web Dashboard (Recommended)
+Set `SUMMARY_PROVIDER` and its credential in `.env`:
 
-Start the built-in FastAPI dashboard to easily manage your processing jobs:
+- `openrouter_free` (default): set `OPENROUTER_API_KEY`.
+- `agy_cli`: install and authenticate `agy`; no OpenRouter key is needed.
+
+For GitHub uploads, also set `GITHUB_TOKEN` and `GITHUB_REPO` (`owner/repository`). `GITHUB_BRANCH` defaults to `main`. Without `--upload`, reports stay local.
+
+## Usage
+
+Run commands from the repository root with the virtual environment active. Summary style defaults to `detailed`; choose `brief` with `--style brief`.
 
 ```bash
-./start_dashboard.sh
-```
-Then visit **[http://127.0.0.1:8999/dashboard](http://127.0.0.1:8999/dashboard)** in your browser!
-- Submit single videos or full playlists.
-- Track success/failure statistics.
-- Download complete ZIP bundles containing your summaries and transcripts.
+# One YouTube video
+python src/main.py -video "https://youtube.com/watch?v=VIDEO_ID"
 
-### 4. Run via CLI
+# A playlist
+python src/main.py -list "https://youtube.com/playlist?list=PLAYLIST_ID"
 
-```bash
-# Basic usage - single video
-python src/main.py "https://youtube.com/watch?v=xxxxx"
+# MP3 files in a folder (not a single file)
+python src/main.py -local ./audio_files
 
-# Process YouTube playlist
-python src/main.py -list "https://youtube.com/playlist?list=xxxxx"
+# A channel scan; one channel URL per line in channellist.txt
+python src/main.py --scan channellist.txt --max-hours 4
 
-# Watchlist Daemon - monitor channels automatically
-python src/main.py --watch-daemon --watch-time 3600
+# Upload reports after processing
+python src/main.py -video "https://youtube.com/watch?v=VIDEO_ID" --upload
 
-# Daily Summary Generation
-python src/main.py --daily-summary
-
-# Resume failed jobs intelligently
-python src/main.py --resume-only
-
-# Diagnostics
-python src/main.py --status
-python src/main.py --list-failed
+# Reprocess an item even if a completed report is already recorded
+python src/main.py -video "https://youtube.com/watch?v=VIDEO_ID" --force
 ```
 
-## 📖 Usage Guide
+For membership or other login-restricted videos, pass a Netscape-format cookies file with `--cookies cookies.txt`. Browser-cookie use is opt-in with `--cookies-from-browser` (and optionally `--browser chrome|edge|firefox`).
 
-### Command Line Arguments
+Other CLI options include `--batch FILE` for a list of URLs or local paths, `--status`, `--list-failed`, `--list-resumable`, `--resume-only`, and `--daily-summary [YYYYMMDD]`. Run `python src/main.py --help` for the current full list.
 
-```
-Input Arguments (mutually exclusive):
-  -video URL                      YouTube video URL
-  -list URL                       YouTube playlist URL
-  --apple-podcast-single URL      Apple Podcasts URL (latest episode)
-  --apple-podcast-list URL        Apple Podcasts URL (all episodes)
-  -local PATH                     Local MP3 folder path
-  --batch FILE                    Batch input file
+## Channel scans
 
-Diagnostic & State Commands:
-  --status                        Display processing statistics
-  --list-failed                   List failed runs and reasons
-  --list-resumable                List runs that can be resumed
-  --resume-only                   Resume failed or stalled runs
+`--scan FILE` reads one channel URL per line. Blank lines and lines beginning with `#` are ignored. It considers videos published in the last two days, processes selected videos oldest-first, and writes a daily digest. A missing channel-list file is created with example entries; add channel URLs before scanning.
 
-Watchlist & Summary Commands:
-  --watch-daemon                  Run the channel watcher continuously
-  --watch-run-once                Execute a single watch scan
-  --import-watchlist FILE         Import channels from text file
-  --daily-summary                 Generate daily summary digest
+The scan has a single-instance lock at `logs/scan.lock`. `--max-hours` sets an in-process time budget; videos not started before the deadline are marked `PENDING_KILLED` and retried on a later scan. The partial digest is still written. `scripts/daily_scan.sh` is provided for scheduled runs; schedule it with your system's cron or task scheduler if desired.
 
-Optional Arguments:
-  --cookies-from-browser          Use local browser cookies (highly recommended)
-  --browser {chrome,edge,firefox} Specify browser to read cookies from
-  --style {brief|detailed}        Summary style (default: detailed)
-  --upload                        Upload report files to GitHub
-```
-
-### Automated GitHub Processing & Watchlist
-If you configure `GITHUB_TOKEN`, `GITHUB_REPO`, and `GITHUB_BRANCH` in `.env`, appending `--upload` to commands uploads generated assets directly to GitHub immediately upon completion.
-The system also intelligently skips redundant processing by checking the historic completion statuses using `run_track.db`.
-
-## 📁 Output Files
+## Output and tracking
 
 ```text
 output/
-├── transcripts/
-│   └── [video_id]_transcript.srt      # Subtitle file
-├── summaries/
-│   └── [video_id]_summary.md          # Summary file 
-├── reports/
-│   └── [timestamp]_[uploader]_[title].md  # Finished Report (Timestamped)
-└── zips/
-    └── summary_bundle_job_*.zip       # Batch UI Zip Export
+├── transcripts/       # SRT transcripts
+├── summaries/         # Intermediate summaries
+└── summary/           # Final Markdown reports and daily_digest/
 
 logs/
-└── ytb_summarizer_[timestamp].log     # Detailed logs
-run_track.db                           # SQLite Pipeline Tracker
+├── ytb_summary_track.db
+├── two_time_fail.txt
+└── *.log
 ```
 
-## ⚙️ Configuration
+The SQLite database `logs/ytb_summary_track.db` is the source of truth for completed-item reuse. A completed item is reused only when its recorded Markdown report still exists. YouTube items use their video ID; local MP3s use a content-derived ID based on the first 8 MB and file size, so renaming a file does not trigger another run. Use `--force` (or its alias `--no-reuse`) to bypass reuse.
 
-Key options available in `.env`:
-- `WHISPER_BACKEND`: `auto` uses `mlx-whisper` for Apple Silicon; forces standard `openai-whisper` otherwise.
-- `SUMMARY_LANGUAGE`: `zh` (Chinese) or `en` (English).
-- `OPENROUTER_MODEL` & `MODEL_PRIORITY_{1..3}`: Allows setup of a resilient waterfall of summarization models, gracefully failing over in case of a 429 or 500 error.
+The first database initialization can migrate completed records from the legacy `logs/run_track.db`, renaming it to `logs/run_track_backup.db`. New tracking writes go to `ytb_summary_track.db`.
 
-## 🔮 Future Plans
+## Configuration
 
-- [x] Support for batch processing multiple videos
-- [x] Local audio file and podcast support
-- [x] Centralized logging system
-- [x] GitHub repository integration
-- [x] Advanced SQLite State Tracker & Smart Resume
-- [x] Web UI interface & Dashboard ZIP Export
-- [x] Dynamic uploader-based prompts & Daily Digest
-- [ ] Support for more video platforms (Bilibili, Vimeo)
-- [ ] Multi-language translation features
-- [ ] Export to PDF/Word formats
-- [ ] Video keyframe screenshots
+Common `.env` settings:
 
----
+- `SUMMARY_PROVIDER`, `OPENROUTER_API_KEY`, `MODEL_PRIORITY_1` through `MODEL_PRIORITY_3`, and `MODEL_FALLBACK` control summarization. OpenRouter tries configured models with retries for transient errors; `agy_cli` receives the complete SRT.
+- `SUMMARY_LANGUAGE` selects `zh` or `en` (default `zh`). `--style` selects `brief` or `detailed`.
+- `WHISPER_MODEL`, `WHISPER_LANGUAGE`, and `WHISPER_BACKEND` control transcription. `WHISPER_BACKEND=auto` selects MLX on Apple Silicon and OpenAI Whisper elsewhere.
+- `GITHUB_TOKEN`, `GITHUB_REPO`, and `GITHUB_BRANCH` configure optional uploads.
 
-**Last Updated**: 2026-03-20
+See `.env.example` for the available settings and defaults. OpenRouter summaries are limited to 60,000 transcript characters; the tail is dropped with a warning. The `agy_cli` provider uses the full SRT.
 
-## 📝 Recent Changes (v2.1 / 2026-03 Update)
+## Development
 
-Extensive Phase 1 - 4 improvements focusing on reliability, observability, and usability:
-- ✅ **Web UI Dashboard**: FastAPI-driven UI serving jobs, displaying stats and fetching batched summary ZIP bundles.
-- ✅ **SQLite State Machine**: Robust tracking of pipeline stages (`DOWNLOAD`, `TRANSCRIBE`, `SUMMARIZE`, etc.), radically enhancing batch stability allowing for resuming halfway via `--resume-only`.
-- ✅ **Daily Digest & Watchlists**: Supports cron/daemon based tracking of new videos per channel, avoiding repetition natively through `.db` queries, and automatically generating an easily readable `daily_digest` markup.
-- ✅ **Dynamic Prompts**: Added semantic detection (e.g. Talk show, Education, Live) via CSV maps altering instructions parsed to OpenRouter dynamically based on the uploader.
-- ✅ **Apple Silicon Boost**: Refactored Python backend bindings to initialize `mlx-whisper` explicitly for Apple Silicon architectures dramatically bypassing Whisper's prior overhead.
+Run the unit suite with:
+
+```bash
+python -m unittest discover tests
+```
+
+Tests use `unittest`; network and external-service calls should be mocked. Utility diagnostics are documented in [scripts/README.md](scripts/README.md).

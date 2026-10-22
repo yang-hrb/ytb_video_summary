@@ -20,7 +20,7 @@ def display_banner() -> None:
     banner = f"""
 {Fore.CYAN}╔═══════════════════════════════════════════════════════════╗
 ║   Audio/Video Transcript & Summarizer v2.1                ║
-║   YouTube + Apple Podcasts + Local MP3                    ║
+║   YouTube + Local MP3                                   ║
 ╚═══════════════════════════════════════════════════════════╝{Style.RESET_ALL}
 """
     console_print(banner)

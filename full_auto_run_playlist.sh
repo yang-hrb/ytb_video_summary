@@ -37,22 +37,19 @@ print_warning() {
     echo -e "${YELLOW}⚠ $1${NC}"
 }
 
+VENV_DIR="/Users/yangyu/github/ytb_video_summary/venv"
+
 # Check if virtual environment exists
 check_venv() {
-    if [ ! -d "venv" ]; then
-        print_error "Virtual environment not found!"
-        print_info "Please run: python -m venv venv"
+    if [ ! -d "$VENV_DIR" ]; then
+        print_error "Virtual environment not found at $VENV_DIR!"
         exit 1
     fi
 }
 
 # Activate virtual environment
 activate_venv() {
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-        source venv/Scripts/activate
-    else
-        source venv/bin/activate
-    fi
+    source "$VENV_DIR/bin/activate"
 }
 
 # Check if .env file exists

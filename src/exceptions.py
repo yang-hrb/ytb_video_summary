@@ -36,7 +36,7 @@ class TranscriptionError(PipelineError):
 class SummarizationError(PipelineError):
     """AI摘要生成失败异常
 
-    用于OpenRouter API调用、模型降级等场景。
+    用于AI摘要提供方调用失败等场景。
     """
     pass
 
@@ -53,14 +53,6 @@ class ConfigurationError(PipelineError):
     """配置错误异常
 
     用于缺少必要的环境变量、配置文件错误等场景。
-    """
-    pass
-
-
-class PodcastError(PipelineError):
-    """播客处理异常
-
-    用于Apple Podcasts RSS解析、下载等场景。
     """
     pass
 

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/candidate.json",
+    "sha256": "03ed3b009ef8ac385697c66fad6c92e672f6d3bcc3cadcf2882574c1c41d2c64",
+    "bytes": 7313
+  },
+  "artifact": {
+    "path": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html",
+    "sha256": "6cbaaa5e76e990f524df3f9b913c63b0f32fc4017ef803f765b2ad1a5fac94e4",
+    "bytes": 841312
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "fail"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/browser-check-runtime",
+      "severity": "error",
+      "message": "browser-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.html"
+      },
+      "evidence": {
+        "reason": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v26.8.1, libuv 1.52.1, darwin; pid=53174, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.finalize.json",
+    "summaryReceipt": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.finalize-summary.json",
+    "browserCheckReceipt": "/Users/yangyu/github/ytb_video_summary/.archify/architecture-ytb-video-summary-20261022-141758/ytb-video-summary.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 6308,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  }
+}
